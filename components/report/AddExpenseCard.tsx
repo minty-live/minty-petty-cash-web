@@ -39,6 +39,7 @@ import {
   type SuggestedField,
 } from "@/lib/expenseAi";
 import {
+  lineEdits,
   missingFields,
   newContactProblem,
   receiptKind,
@@ -61,6 +62,19 @@ const OUTLINE_BUTTON =
 const FILLED_BUTTON =
   "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80 disabled:opacity-70";
 const ADD_FAILED = "An error occurred while adding the expense. Please try again.";
+const EDIT_FAILED = "An error occurred while updating the expense. Please try again.";
+
+/** A saved line as the card's values, for Edit Expense. */
+function lineValues(line: ExpenseLine): EntryValues {
+  return {
+    amount: line.amount.toFixed(2),
+    description: line.description ?? "",
+    supplierText: line.supplier?.name ?? "",
+    supplier: line.supplier,
+    accountText: line.account?.name ?? "",
+    account: line.account,
+  };
+}
 
 const Star = () => (
   <>
@@ -87,6 +101,10 @@ export type AddExpenseProps = {
   /** A supplier made here, for the page's list (Flask pushes it onto `allContacts`). */
   onSupplierCreated: (supplier: Supplier) => void;
   onAdded: (line: ExpenseLine, total: number) => void;
+  /** Edit Expense: the saved draft line the card opens filled in with; Save changes it in place. */
+  line?: ExpenseLine | null;
+  /** Edit Expense: the line as the API answers it after Save, with the new total. */
+  onSaved?: (line: ExpenseLine, total: number) => void;
   onCancel: () => void;
   /** The phone card's overlay: its text while something is sent, null when done. */
   setBusy: (text: string | null) => void;
@@ -103,6 +121,11 @@ export type AddExpenseProps = {
  *
  * A picked receipt is also read (components/report/ReceiptReader.tsx, `POST /reports/expenses/extract`):
  * its suggestions fill only empty fields, ringed and marked, and the card never waits for it.
+ *
+ * With `line` it is "Edit Expense" (owner, 2026-11-16): the same card filled in from a saved draft
+ * line, its receipt named in the drop zone. Save sends only what changed as one multipart
+ * `PATCH /expense-lines/{id}` (a picked file replaces the line's receipt); nothing changed just
+ * closes it.
  */
 export function AddExpenseCard(props: AddExpenseProps) {
   const {
@@ -113,14 +136,19 @@ export function AddExpenseCard(props: AddExpenseProps) {
     canCreateSupplier,
     onSupplierCreated,
     onAdded,
+    line = null,
+    onSaved,
     onCancel,
     setBusy,
     onNoDraft,
   } = props;
+  const editing = line !== null;
   const toast = useToast();
   const card = useRef<HTMLFormElement>(null);
   // the four typed fields, with the receipt reader's marks and notes on them (lib/expenseAi.ts)
-  const [entry, setEntry] = useState<EntryState>(() => entryState());
+  const [entry, setEntry] = useState<EntryState>(() =>
+    entryState(line ? lineValues(line) : undefined),
+  );
   const { amount, description, supplierText, supplier, accountText, account } = entry.values;
   const change = (field: SuggestedField, patch: Partial<EntryValues>) =>
     setEntry((state) => edited(state, field, patch));
@@ -252,14 +280,28 @@ export function AddExpenseCard(props: AddExpenseProps) {
       descriptionField.current?.focus();
       return;
     }
-    const missing = missingFields({ amount, supplierText, supplier, accountText, account, file });
+    // a saved line keeps its receipt unless another is picked
+    const keepsReceipt = line !== null && line.receipts.length > 0;
+    const missing = missingFields({
+      amount,
+      supplierText,
+      supplier,
+      accountText,
+      account,
+      file,
+    }).filter((field) => !(field === "file" && keepsReceipt && !file));
     setErrors(new Set(missing));
-    if (missing.length > 0 || !supplier || !account || !file) {
+    if (missing.length > 0 || !supplier || !account || (!file && !keepsReceipt)) {
       toast("Please fill out the Required Fields", "error");
       return;
     }
     // what is on the card is what is sent: a reading still out is dropped
     reader.cancel();
+    if (line) {
+      await save(line, file);
+      return;
+    }
+    if (!file) return;
     const form = new FormData();
     form.append("transaction_date", day);
     form.append("amount", String(parseMoney(amount)));
@@ -290,6 +332,39 @@ export function AddExpenseCard(props: AddExpenseProps) {
     }
   }
 
+  /** Edit Expense's Save: only the changed fields, and a picked file as the new receipt. */
+  async function save(saved: ExpenseLine, newReceipt: File | null) {
+    const changes = lineEdits(saved, { amount, description, supplier, account });
+    if (Object.keys(changes).length === 0 && !newReceipt) {
+      onCancel();
+      return;
+    }
+    const form = new FormData();
+    for (const [name, value] of Object.entries(changes)) form.append(name, value);
+    if (newReceipt) form.append("receipt", newReceipt, newReceipt.name);
+    setSending(true);
+    setBusy("Saving...");
+    try {
+      const answer = await pettyCashFetch<{ line: ExpenseLine; total: number }>(
+        `/expense-lines/${encodeURIComponent(saved.id)}`,
+        { method: "PATCH", form },
+      );
+      setBusy(null);
+      onSaved?.(answer.line, answer.total);
+      toast("Expense updated successfully!", "success");
+    } catch (err) {
+      setBusy(null);
+      setSending(false);
+      if (err instanceof ApiError && err.status === 401) return;
+      const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
+      if (body?.to === "opening") {
+        onNoDraft(err instanceof ApiError ? err.message : EDIT_FAILED);
+        return;
+      }
+      toast(sentenceOf(err) ?? EDIT_FAILED, "error");
+    }
+  }
+
   // a field holding a suggestion has a value, so it is not red whatever a refused Add said before
   const invalid = (field: RequiredField) =>
     errors.has(field) && !(field !== "file" && entry.marks[field]);
@@ -305,11 +380,12 @@ export function AddExpenseCard(props: AddExpenseProps) {
       aria-labelledby="addExpenseTitle"
     >
       <h2 id="addExpenseTitle" className="mb-6 text-xl font-bold text-flask-gray-900">
-        Add New Expense
+        {editing ? "Edit Expense" : "Add New Expense"}
       </h2>
 
       <ReceiptDrop
         picked={picked}
+        kept={line && line.receipts.length > 0 ? line.receipts[0].name : null}
         invalid={errors.has("file")}
         onFile={(f) => {
           revoke(pickedRef.current);
@@ -522,7 +598,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
           <span>Cancel</span>
         </button>
         <button type="submit" disabled={sending} className={FILLED_BUTTON}>
-          <span>Add</span>
+          <span>{editing ? "Save" : "Add"}</span>
         </button>
       </div>
     </form>
@@ -772,11 +848,14 @@ const DONE_ICON = "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0
  */
 function ReceiptDrop({
   picked,
+  kept = null,
   invalid,
   onFile,
   children,
 }: {
   picked: Picked | null;
+  /** Edit Expense: the saved receipt's name, shown until another file is picked. */
+  kept?: string | null;
   invalid: boolean;
   onFile: (file: File | null) => void;
   children?: ReactNode;
@@ -806,7 +885,8 @@ function ReceiptDrop({
   let look: string;
   if (dragging) look = "border-2 border-dashed border-flask-blue-500 bg-flask-blue-50 p-6";
   else if (file && kind === "image") look = "border-0 bg-transparent p-0";
-  else if (file) look = "border-2 border-dashed border-flask-upload-ok bg-flask-upload-ok-bg p-6";
+  else if (file || kept)
+    look = "border-2 border-dashed border-flask-upload-ok bg-flask-upload-ok-bg p-6";
   else
     look = `border-2 border-dashed ${invalid ? "border-flask-red-500" : "border-flask-gray-300"} bg-flask-gray-50 p-6 hover:bg-flask-gray-100`;
 
@@ -895,13 +975,13 @@ function ReceiptDrop({
         ) : (
           <>
             <svg
-              className={`mx-auto mb-4 h-12 w-12 ${file && !dragging ? "text-flask-upload-ok" : "text-flask-gray-400"}`}
+              className={`mx-auto mb-4 h-12 w-12 ${(file || kept) && !dragging ? "text-flask-upload-ok" : "text-flask-gray-400"}`}
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
               aria-hidden="true"
             >
-              {file && !dragging ? (
+              {(file || kept) && !dragging ? (
                 <path strokeLinecap="round" strokeLinejoin="round" d={DONE_ICON} />
               ) : (
                 <path
@@ -916,6 +996,15 @@ function ReceiptDrop({
               <>
                 <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
                   &quot;{uploadName(file.name)}&quot; Uploaded
+                </p>
+                <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
+                  Click to change files
+                </p>
+              </>
+            ) : kept && !dragging ? (
+              <>
+                <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
+                  &quot;{uploadName(kept)}&quot; Attached
                 </p>
                 <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
                   Click to change files

@@ -55,6 +55,7 @@ function api(...extract: Answer[]) {
   const reads: FormData[] = [];
   const adds: FormData[] = [];
   const suppliers: unknown[] = [];
+  const edits: { path: string; form: FormData; method?: string }[] = [];
   fetchMock.mockImplementation(async (path, init) => {
     if (path === "/reports/expenses/extract") {
       reads.push(init?.form as FormData);
@@ -65,13 +66,17 @@ function api(...extract: Answer[]) {
       adds.push(init?.form as FormData);
       return { line: { id: "new" }, total: 48.8 };
     }
+    if (path.startsWith("/expense-lines/")) {
+      edits.push({ path, form: init?.form as FormData, method: init?.method });
+      return { line: { id: "l1" }, total: 99.9 };
+    }
     if (path === "/suppliers") {
       suppliers.push(init?.json);
       return { id: "s-new", name: "x" };
     }
     throw new Error(`unexpected ${path}`);
   });
-  return { reads, adds, suppliers };
+  return { reads, adds, suppliers, edits };
 }
 
 function show(over: Partial<AddExpenseProps> = {}) {
@@ -83,6 +88,7 @@ function show(over: Partial<AddExpenseProps> = {}) {
     canCreateSupplier: true,
     onSupplierCreated: vi.fn(),
     onAdded: vi.fn(),
+    onSaved: vi.fn(),
     onCancel: vi.fn(),
     setBusy: vi.fn(),
     onNoDraft: vi.fn(),
@@ -111,6 +117,9 @@ beforeAll(() => {
 });
 beforeEach(() => resetReaderLatch());
 afterEach(() => resetReaderLatch());
+
+/** The reader switched off (the API without EXPENSE_AI_ENABLED). */
+const READER_OFF_ANSWER = { suggestions: null, reason: "disabled" };
 
 describe("the receipt reader in Add New Expense", () => {
   it("fills the empty fields, rings and marks them, and says so once", async () => {
@@ -351,5 +360,66 @@ describe("the supplier picker tells the person they can type to add (owner, 2026
     show({ canCreateSupplier: false });
     await userEvent.click(supplier());
     expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+  });
+});
+
+describe("Edit Expense (the add card on a saved draft line)", () => {
+  const LINE = {
+    id: "l1",
+    item: "General Expenses",
+    amount: 1200.5,
+    description: "Milk",
+    supplier: SUPPLIERS[0],
+    account: ACCOUNTS[0],
+    receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+  };
+  const form = (fd: FormData) =>
+    Object.fromEntries(Array.from(fd.keys()).map((k) => [k, fd.get(k)]));
+
+  it("opens filled in from the line, titled Edit Expense, with the current receipt named", () => {
+    api(READER_OFF_ANSWER);
+    show({ line: LINE });
+    expect(screen.getByRole("heading", { name: "Edit Expense" })).toBeInTheDocument();
+    expect(amount()).toHaveValue("1,200.50");
+    expect(description()).toHaveValue("Milk");
+    expect(supplier()).toHaveValue("Wellcome");
+    expect(account()).toHaveValue("General Expenses");
+    expect(screen.getByText(/milk\.png/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
+  });
+
+  it("saves only what changed, with no receipt needed, and hands back the line", async () => {
+    const { edits } = api(READER_OFF_ANSWER);
+    const props = show({ line: LINE });
+    await userEvent.clear(amount());
+    await userEvent.type(amount(), "99.90");
+    await userEvent.click(supplier());
+    await userEvent.click(screen.getByRole("option", { name: "ParknShop" }));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith({ id: "l1" }, 99.9));
+    expect(edits).toHaveLength(1);
+    expect(edits[0].path).toBe("/expense-lines/l1");
+    expect(edits[0].method).toBe("PATCH");
+    expect(form(edits[0].form)).toEqual({ amount: "99.9", supplier_id: "s-park" });
+    expect(props.onAdded).not.toHaveBeenCalled();
+  });
+
+  it("sends a newly picked receipt to replace the line's", async () => {
+    const { edits } = api(READER_OFF_ANSWER);
+    const props = show({ line: LINE });
+    await attach(png("new.png"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    const sent = edits[0].form.get("receipt") as File;
+    expect(sent.name).toBe("new.png");
+    expect(Array.from(edits[0].form.keys())).toEqual(["receipt"]);
+  });
+
+  it("closes without sending anything when nothing changed", async () => {
+    const { edits } = api(READER_OFF_ANSWER);
+    const props = show({ line: LINE });
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(props.onCancel).toHaveBeenCalled();
+    expect(edits).toHaveLength(0);
   });
 });

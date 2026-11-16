@@ -113,6 +113,8 @@ type Handlers = {
   /** PUT /reports/expenses */
   onSave?: (body: Json, route: Route) => Promise<void>;
   onDelete?: (route: Route) => Promise<void>;
+  /** PATCH /expense-lines/{id} (Edit Expense) */
+  onEdit?: (req: Request, route: Route) => Promise<void>;
   onSupplier?: (body: Json, route: Route) => Promise<void>;
   /** GET /reports/expenses, when not the answer */
   onRead?: (route: Route) => Promise<void>;
@@ -158,6 +160,11 @@ async function stub(page: Page, answer: Json, h: Handlers = {}) {
     if (route.request().method() === "DELETE") {
       if (h.onDelete) await h.onDelete(route);
       else await route.fulfill({ json: { total: 34 } });
+      return;
+    }
+    if (route.request().method() === "PATCH") {
+      if (h.onEdit) await h.onEdit(route.request(), route);
+      else await route.fulfill({ json: { line: LINE, total: 1234.5 } });
       return;
     }
     await route.fulfill({ body: PNG, contentType: "image/png" });
@@ -555,6 +562,122 @@ test("a line opens Expense Details with its receipt, which opens full screen", a
     "Contact NameN/A",
   );
   await expect(page.getByRole("dialog", { name: "Expense Details" })).toContainText("Description-");
+});
+
+/** The multipart body's field names, in order (a file part shows as its name). */
+function partNames(body: string | null): string[] {
+  return [...(body ?? "").matchAll(/; name="([^"]+)"/g)].map((m) => m[1]);
+}
+
+test("the pencil opens Edit Expense filled in; Save sends only the changes and the row follows", async ({
+  page,
+}) => {
+  let sent: string | null = null;
+  let path = "";
+  await openWith(page, expensesAnswer(), {
+    onEdit: async (req, route) => {
+      sent = req.postData();
+      path = new URL(req.url()).pathname;
+      await route.fulfill({
+        json: {
+          line: { ...LINE, amount: 99.9, supplier: { id: "s-park", name: "ParknShop" } },
+          total: 133.9,
+        },
+      });
+    },
+  });
+  await page.getByRole("button", { name: "Edit expense" }).first().click();
+  await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add New Expense" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("1,200.50");
+  await expect(page.getByRole("textbox", { name: "Description" })).toHaveValue(
+    "Milk and <b>tea</b>",
+  );
+  await expect(page.getByRole("combobox", { name: /Suppliers/ })).toHaveValue("Wellcome");
+  await expect(page.getByRole("combobox", { name: /Account Code/ })).toHaveValue(
+    "General Expenses",
+  );
+  await expect(page.getByText('"milk.png" Attached')).toBeVisible();
+  await expectNoHorizontalScroll(page);
+
+  await page.getByRole("textbox", { name: /Expense Amount/ }).fill("99.90");
+  await page.getByRole("combobox", { name: /Suppliers/ }).click();
+  await page.getByRole("option", { name: "ParknShop" }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+
+  await expect(toast(page, "Expense updated successfully!")).toBeVisible();
+  expect(path).toMatch(/\/expense-lines\/l1$/);
+  expect(partNames(sent)).toEqual(["amount", "supplier_id"]);
+  expect(sent).toContain("99.9");
+  expect(sent).toContain("s-park");
+  await expect(page.getByRole("heading", { name: "Edit Expense" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "General Expenses, HKD 99.90" })).toBeVisible();
+  await expect(page.getByText("HKD 133.90")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add New Expense" })).toBeVisible();
+});
+
+test("Edit in Expense Details opens the card; a new receipt replaces the line's", async ({
+  page,
+}) => {
+  let sent: string | null = null;
+  await openWith(page, expensesAnswer(), {
+    onEdit: async (req, route) => {
+      sent = req.postData();
+      await route.fulfill({
+        json: {
+          line: { ...LINE, receipts: [{ id: "r2", name: "new.png", mime_type: "image/png" }] },
+          total: 1234.5,
+        },
+      });
+    },
+  });
+  await page.getByRole("button", { name: "General Expenses, HKD 1,200.50" }).click();
+  const dialog = page.getByRole("dialog", { name: "Expense Details" });
+  await dialog.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+  await page
+    .getByTestId("expense_files")
+    .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: PNG });
+  await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(toast(page, "Expense updated successfully!")).toBeVisible();
+  expect(partNames(sent)).toEqual(["receipt"]);
+  expect(sent).toContain('filename="new.png"');
+});
+
+test("Edit Expense: a refusal says the server's sentence and keeps the card; Cancel changes nothing", async ({
+  page,
+}) => {
+  let edits = 0;
+  await openWith(page, expensesAnswer(), {
+    onEdit: async (_req, route) => {
+      edits += 1;
+      await route.fulfill({
+        status: 409,
+        json: { error: "This report has been submitted, so its lines can't change here." },
+      });
+    },
+  });
+  await page.getByRole("button", { name: "Edit expense" }).first().click();
+  await page.getByRole("textbox", { name: "Description" }).fill("Milk");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    toast(page, "This report has been submitted, so its lines can't change here."),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
+
+  // an open edit card holds the stepper back like the add card
+  await page.getByRole("link", { name: /^Sales/ }).click();
+  await expect(
+    toast(page, "You have an unsaved expense. Please save before navigating."),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Edit Expense" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "General Expenses, HKD 1,200.50" })).toBeVisible();
+  await expect(page.getByText("Milk and <b>tea</b>")).toBeVisible();
+  expect(edits).toBe(1);
 });
 
 test("an open add card holds the stepper back with Flask's warning", async ({ page }) => {

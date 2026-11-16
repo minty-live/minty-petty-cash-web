@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   detailRows,
+  lineEdits,
   missingFields,
   newContactProblem,
   receiptKind,
@@ -188,5 +189,46 @@ describe("newContactProblem", () => {
     expect(newContactProblem("x".repeat(151))).toBe(
       "Keep the supplier's name to 150 characters or fewer.",
     );
+  });
+});
+
+describe("lineEdits (Edit Expense on a draft line)", () => {
+  const wellcome = S("Wellcome");
+  const park = S("ParknShop");
+  const general = { id: "a-429", code: "429", name: "General Expenses" };
+  const printing = { id: "a-461", code: "461", name: "Printing & Stationery" };
+  const line: ExpenseLine = {
+    id: "l1",
+    item: "General Expenses",
+    amount: 1200.5,
+    description: "Milk",
+    supplier: wellcome,
+    account: general,
+    receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+  };
+  const same = { amount: "1,200.50", description: "Milk", supplier: wellcome, account: general };
+
+  it("sends nothing when nothing changed (grouping and spaces aside)", () => {
+    expect(lineEdits(line, same)).toEqual({});
+    expect(lineEdits(line, { ...same, amount: "1200.5", description: "  Milk " })).toEqual({});
+  });
+  it("sends only the fields that changed, by the API's names", () => {
+    expect(lineEdits(line, { ...same, amount: "99.90" })).toEqual({ amount: "99.9" });
+    expect(lineEdits(line, { ...same, description: "Milk and tea" })).toEqual({
+      description: "Milk and tea",
+    });
+    expect(lineEdits(line, { ...same, supplier: park, account: printing })).toEqual({
+      supplier_id: park.id,
+      account_id: printing.id,
+    });
+  });
+  it("sends an emptied description, so the API clears it", () => {
+    expect(lineEdits(line, { ...same, description: "" })).toEqual({ description: "" });
+  });
+  it("picks a supplier or account for a line that had none", () => {
+    expect(lineEdits({ ...line, supplier: null, account: null }, { ...same })).toEqual({
+      supplier_id: wellcome.id,
+      account_id: general.id,
+    });
   });
 });

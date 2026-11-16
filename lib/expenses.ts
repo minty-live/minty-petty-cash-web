@@ -142,6 +142,31 @@ export function missingFields(form: AddForm): RequiredField[] {
   return missing;
 }
 
+/** What Edit Expense compares with the saved line. */
+export type LineEditForm = {
+  amount: string;
+  description: string;
+  supplier: Supplier | null;
+  account: Account | null;
+};
+
+/**
+ * The fields of a draft line that Edit Expense changed, by `PATCH /expense-lines/{id}`'s names -
+ * the API keeps whatever is not sent. The amount is compared in cents (grouping aside), the
+ * description as the API stores it (trimmed; an emptied one is sent, which clears it), and a
+ * supplier or account only once one is chosen from its list.
+ */
+export function lineEdits(line: ExpenseLine, form: LineEditForm): Record<string, string> {
+  const edits: Record<string, string> = {};
+  const amount = parseMoney(form.amount);
+  if (Math.round(amount * 100) !== Math.round(line.amount * 100)) edits.amount = String(amount);
+  const description = form.description.trim();
+  if (description !== (line.description ?? "")) edits.description = description;
+  if (form.supplier && form.supplier.id !== line.supplier?.id) edits.supplier_id = form.supplier.id;
+  if (form.account && form.account.id !== line.account?.id) edits.account_id = form.account.id;
+  return edits;
+}
+
 /** Expense Details' rows, as Flask writes them: "N/A" and "-" for what a line lacks. */
 export function detailRows(line: ExpenseLine): {
   contact: string;

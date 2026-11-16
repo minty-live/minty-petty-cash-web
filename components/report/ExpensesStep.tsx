@@ -41,13 +41,15 @@ type SaveAnswer = { next: "deposit" | "dashboard"; transaction_date: string };
  * report header, the stepper, "Expenses", one card listing the day's lines with "Total Expense"
  * and "+ Add New Expense", the inline add card (components/report/AddExpenseCard.tsx), Expense
  * Details and Delete Expense, then Save & Next / Save & Exit. Reads and writes through
- * `GET`/`PUT /reports/expenses`, `POST /reports/expenses/lines`, `DELETE /expense-lines/<id>` and
- * `POST /suppliers` (Minty `petty_cash_api/routes/expenses.py`).
+ * `GET`/`PUT /reports/expenses`, `POST /reports/expenses/lines`, `PATCH`/`DELETE
+ * /expense-lines/<id>` and `POST /suppliers` (Minty `petty_cash_api/routes/expenses.py`).
  *
  * The add card also reads a picked receipt (components/report/ReceiptReader.tsx).
  *
- * Left out on purpose: Flask's edit of a saved line (the page has no way into it), its dead
- * "submit all" path and the read-only view of a submitted report.
+ * A saved line is changed in place (owner, 2026-11-16): the pencil on its row, or Edit in Expense
+ * Details, opens the same card filled in ("Edit Expense"). One card is open at a time.
+ *
+ * Left out on purpose: Flask's dead "submit all" path and the read-only view of a submitted report.
  */
 export function ExpensesStep({ day }: { day: string | null }) {
   const toast = useToast();
@@ -120,12 +122,15 @@ function ExpensesForm({
   const [total, setTotal] = useState(page.total);
   const [suppliers, setSuppliers] = useState<Supplier[]>(page.suppliers);
   const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<ExpenseLine | null>(null);
+  // one card at a time: Add New Expense or Edit Expense
+  const cardOpen = adding || editing !== null;
   const [busy, setBusy] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ExpenseLine | null>(null);
   const [deleting, setDeleting] = useState<ExpenseLine | null>(null);
 
   function onStepClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (adding) {
+    if (cardOpen) {
       event.preventDefault();
       toast(UNSAVED, "warning");
     }
@@ -172,10 +177,24 @@ function ExpensesForm({
     }
   }
 
+  function startEdit(line: ExpenseLine) {
+    if (cardOpen) {
+      toast(UNSAVED, "warning");
+      return;
+    }
+    setViewing(null);
+    setEditing(line);
+  }
+
   const overlays = (
     <>
       {viewing ? (
-        <ExpenseDetailsModal line={viewing} code={code} onClose={() => setViewing(null)} />
+        <ExpenseDetailsModal
+          line={viewing}
+          code={code}
+          onClose={() => setViewing(null)}
+          onEdit={() => startEdit(viewing)}
+        />
       ) : null}
       {deleting ? (
         <DeleteExpenseModal
@@ -219,6 +238,7 @@ function ExpensesForm({
                   line={line}
                   code={code}
                   onOpen={() => setViewing(line)}
+                  onEdit={() => startEdit(line)}
                   onDelete={() => setDeleting(line)}
                 />
               ))}
@@ -232,7 +252,7 @@ function ExpensesForm({
                 {formatMoney(total, code)}
               </span>
             </div>
-            {!adding ? (
+            {!cardOpen ? (
               <div>
                 <button
                   type="button"
@@ -275,6 +295,29 @@ function ExpensesForm({
               setAdding(false);
             }}
             onCancel={() => setAdding(false)}
+            setBusy={setBusy}
+            onNoDraft={(sentence) => backToOpening(sentence, day)}
+          />
+        ) : null}
+        {editing ? (
+          <AddExpenseCard
+            key={editing.id}
+            day={day}
+            code={code}
+            suppliers={suppliers}
+            accounts={page.accounts}
+            canCreateSupplier={page.permissions.create_supplier}
+            onSupplierCreated={(s) =>
+              setSuppliers((all) => (all.some((x) => x.id === s.id) ? all : [...all, s]))
+            }
+            line={editing}
+            onAdded={() => undefined}
+            onSaved={(line, newTotal) => {
+              setLines((all) => all.map((l) => (l.id === line.id ? line : l)));
+              setTotal(newTotal);
+              setEditing(null);
+            }}
+            onCancel={() => setEditing(null)}
             setBusy={setBusy}
             onNoDraft={(sentence) => backToOpening(sentence, day)}
           />
@@ -334,11 +377,14 @@ export function ExpenseRow({
   line,
   code,
   onOpen,
+  onEdit,
   onDelete,
 }: {
   line: ExpenseLine;
   code: string | null;
   onOpen: () => void;
+  /** A draft's line: the pencil that opens Edit Expense. */
+  onEdit?: () => void;
   onDelete?: () => void;
 }) {
   return (
@@ -371,6 +417,19 @@ export function ExpenseRow({
         <div className="text-right">
           <div className="flex items-center justify-end gap-3">
             <div className="font-medium text-flask-red-600">{formatMoney(line.amount, code)}</div>
+            {onEdit ? (
+              <button
+                type="button"
+                aria-label="Edit expense"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEdit();
+                }}
+                className="flask-hover-bounce -m-2 cursor-pointer rounded-full p-2 text-flask-gray-400 hover:text-flask-teal"
+              >
+                {PENCIL}
+              </button>
+            ) : null}
             {onDelete ? (
               <button
                 type="button"
@@ -390,6 +449,23 @@ export function ExpenseRow({
     </div>
   );
 }
+
+const PENCIL = (
+  <svg
+    className="h-4 w-4"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    aria-hidden="true"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L6.832 19.82a4.5 4.5 0 0 1-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 0 1 1.13-1.897L16.863 4.487Zm0 0L19.5 7.125"
+    />
+  </svg>
+);
 
 const EXPAND = (
   <svg
@@ -417,6 +493,8 @@ const EXPAND = (
  * With `editor` (a submitted report's Edit Details, Flask's report_edit mode) the editor takes the
  * grey box's place, and `onDismiss` - Escape or a click outside - may refuse while it holds changes;
  * Close always closes (discarding them), as Flask's did.
+ *
+ * With `onEdit` (a draft's line in the Expenses step) an Edit button sits before Close.
  */
 export function ExpenseDetailsModal({
   line,
@@ -424,12 +502,14 @@ export function ExpenseDetailsModal({
   onClose,
   onDismiss = onClose,
   editor,
+  onEdit,
 }: {
   line: ExpenseLine;
   code: string | null;
   onClose: () => void;
   onDismiss?: () => void;
   editor?: ReactNode;
+  onEdit?: () => void;
 }) {
   const urls = useReceiptUrls(line);
   const [shown, setShown] = useState<ShownReceipt | null>(null);
@@ -558,6 +638,15 @@ export function ExpenseDetailsModal({
       </div>
 
       <div className="flex justify-center gap-3">
+        {onEdit && !editor ? (
+          <button
+            type="button"
+            onClick={onEdit}
+            className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
+          >
+            <span>Edit</span>
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onClose}
