@@ -605,7 +605,7 @@ test("View: Edit Report reopens the day and opens its Opening step, in this app"
   expect(sent.reopen).toBe(1);
 });
 
-test("View: Edit Report on a report in Xero asks first (Flask's confirm); No sends nothing", async ({
+test("View: Edit Report on a report in Xero asks first, in the page; Cancel sends nothing", async ({
   page,
 }) => {
   const sent = await openView(page, {
@@ -615,23 +615,28 @@ test("View: Edit Report on a report in Xero asks first (Flask's confirm); No sen
       publishing_status: "completed",
     }),
   });
-  const asked: string[] = [];
-  page.once("dialog", (d) => {
-    asked.push(d.message());
+  // never the browser's own dialog (owner, 2026-11-16)
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
     void d.dismiss();
   });
   await page.getByRole("button", { name: "Edit Report" }).click();
-  await expect.poll(() => asked.length).toBe(1);
-  expect(asked[0]).toContain("This report was already published to Xero.");
+  const dialog = page.getByRole("dialog", { name: "Edit Report" });
+  await expect(dialog.getByText("This report was already published to Xero.")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
   expect(sent.reopen).toBe(0);
   await expect(page.getByRole("heading", { name: "Summary", exact: true })).toBeVisible();
 
-  page.once("dialog", (d) => void d.accept());
   await page.getByRole("button", { name: "Edit Report" }).click();
+  await dialog.getByRole("button", { name: "Continue" }).click();
   await expect(page).toHaveURL(
     new RegExp(`${BASE}/reports/new/opening\\?transaction_date=${DAY}$`),
   );
   expect(sent.reopen).toBe(1);
+  expect(native).toEqual([]);
 });
 
 test("View: a refused Edit Report says the API's sentence and keeps the page", async ({ page }) => {

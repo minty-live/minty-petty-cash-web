@@ -200,7 +200,7 @@ function HistoryBody({
   const [busy, setBusy] = useState<string | null>(null);
   // a ref, not state: a second click in the same frame must see the first one
   const acting = useRef(false);
-  const edit = useEditReport(entityId, entityName, acting);
+  const { edit, ui: editAsk } = useEditReport(entityId, entityName, acting);
   const publish = usePublish({
     place: "history",
     entityId,
@@ -456,6 +456,7 @@ function HistoryBody({
         />
       ) : null}
       {publish.ui}
+      {editAsk}
     </>
   );
 
@@ -506,7 +507,7 @@ function HistoryBody({
             onMenu={() => setMenu((open) => (open === row.id ? null : row.id))}
             onEdit={() => {
               setMenu(null);
-              void edit(row.id, row.was_published);
+              edit(row.id, row.was_published);
             }}
             onDelete={() => {
               setMenu(null);

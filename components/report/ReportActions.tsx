@@ -1,12 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { useToast } from "@/components/flask/Toasts";
 import { Modal } from "@/components/report/ReportChrome";
 import { ApiError, HOUSE_FALLBACK, pettyCashFetch } from "@/lib/apiClient";
-import { DELETE_IN_XERO, DELETE_WARNING, EDIT_PUBLISHED_CONFIRM } from "@/lib/report";
+import { DELETE_IN_XERO, DELETE_WARNING, EDIT_PUBLISHED } from "@/lib/report";
 import { shareUrl } from "@/lib/share";
 import { stepHref } from "@/lib/wizardPages";
 
@@ -74,16 +74,30 @@ export function ShareButton({ onClick }: { onClick: () => void }) {
 
 /**
  * Edit Report (a report's view) and Edit (report history), as Flask's `handleEditReport`: its
- * confirm first for a report that has been to Xero, "Converting report to draft...", `POST
+ * confirm first for a report that has been to Xero - here `EditPublishedModal`, in the page, never
+ * the browser's own dialog (owner, 2026-11-16) - then "Converting report to draft...", `POST
  * /reports/<id>/reopen`, "Back to draft — opening it for you now.", then this app's Opening for
  * the day. A refusal says the API's sentence. `actingRef` is the page's one-action-at-a-time guard.
+ * The page renders `ui` (the modal while it asks) with its other overlays.
  */
-export function useEditReport(entityId: string, entityName: string, actingRef: RefObject<boolean>) {
+export function useEditReport(
+  entityId: string,
+  entityName: string,
+  actingRef: RefObject<boolean>,
+): { edit: (reportId: string, wasPublished: boolean) => void; ui: ReactNode } {
   const toast = useToast();
   const router = useRouter();
-  return async function edit(reportId: string, wasPublished: boolean) {
+  /** The report a "Continue?" is being asked about, else null. */
+  const [asking, setAsking] = useState<string | null>(null);
+
+  function edit(reportId: string, wasPublished: boolean) {
     if (actingRef.current) return;
-    if (wasPublished && !window.confirm(EDIT_PUBLISHED_CONFIRM)) return;
+    if (wasPublished) setAsking(reportId);
+    else void reopen(reportId);
+  }
+
+  async function reopen(reportId: string) {
+    if (actingRef.current) return;
     actingRef.current = true;
     toast("Converting report to draft...", "info");
     try {
@@ -98,7 +112,104 @@ export function useEditReport(entityId: string, entityName: string, actingRef: R
       if (err instanceof ApiError && err.status === 401) return;
       toast(err instanceof ApiError ? err.message : UNREACHABLE, "error");
     }
-  };
+  }
+
+  const ui = asking ? (
+    <EditPublishedModal
+      onCancel={() => setAsking(null)}
+      onContinue={() => {
+        setAsking(null);
+        void reopen(asking);
+      }}
+    />
+  ) : null;
+
+  return { edit, ui };
+}
+
+/** The amber "it is in Xero" note the Delete and Edit modals open with. */
+function AmberNote({ className, title, body }: { className: string; title: string; body: string }) {
+  return (
+    <div
+      className={`${className} flex items-start rounded-[8px] border-l-4 border-l-flask-amber-edge bg-flask-amber-bg px-4 py-3`}
+    >
+      <svg
+        className="mr-3 mt-0.5 flex-shrink-0"
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        aria-hidden="true"
+      >
+        <circle
+          cx="10"
+          cy="10"
+          r="9"
+          className="fill-flask-amber-bg stroke-flask-amber"
+          strokeWidth="2"
+        />
+        <rect x="9" y="8" width="2" height="5" rx="1" className="fill-flask-amber" />
+        <rect x="9" y="5" width="2" height="2" rx="1" className="fill-flask-amber" />
+      </svg>
+      <div className="min-w-0">
+        <p className="mb-1 text-sm font-bold text-flask-amber-ink">{title}</p>
+        <p className="text-sm leading-snug text-flask-amber-ink">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "Edit Report" for a report already in Xero: the amber "already published" note in the same frame
+ * as Delete Report, then Cancel / Continue.
+ */
+function EditPublishedModal({
+  onCancel,
+  onContinue,
+}: {
+  onCancel: () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <Modal
+      titleId="editReportTitle"
+      onClose={onCancel}
+      className="rounded-flask-lg bg-flask-white p-6"
+    >
+      <div className="mb-6 flex items-center justify-between">
+        <h2 id="editReportTitle" className="text-xl font-bold text-flask-gray-900">
+          Edit Report
+        </h2>
+        <button
+          type="button"
+          onClick={onCancel}
+          aria-label="Close"
+          className="text-flask-gray-400 hover:text-flask-gray-600"
+        >
+          {CLOSE_ICON}
+        </button>
+      </div>
+
+      <AmberNote className="mb-6" title={EDIT_PUBLISHED.title} body={EDIT_PUBLISHED.body} />
+
+      <div className="flex gap-3">
+        <button
+          type="button"
+          onClick={onCancel}
+          className="flex-1 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onContinue}
+          className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+        >
+          <span>Continue</span>
+        </button>
+      </div>
+    </Modal>
+  );
 }
 
 /**
@@ -282,30 +393,7 @@ export function DeleteReportModal({
       </div>
 
       {wasPublished ? (
-        <div className="mb-4 flex items-start rounded-[8px] border-l-4 border-l-flask-amber-edge bg-flask-amber-bg px-4 py-3">
-          <svg
-            className="mr-3 mt-0.5 flex-shrink-0"
-            width="20"
-            height="20"
-            viewBox="0 0 20 20"
-            fill="none"
-            aria-hidden="true"
-          >
-            <circle
-              cx="10"
-              cy="10"
-              r="9"
-              className="fill-flask-amber-bg stroke-flask-amber"
-              strokeWidth="2"
-            />
-            <rect x="9" y="8" width="2" height="5" rx="1" className="fill-flask-amber" />
-            <rect x="9" y="5" width="2" height="2" rx="1" className="fill-flask-amber" />
-          </svg>
-          <div className="min-w-0">
-            <p className="mb-1 text-sm font-bold text-flask-amber-ink">{DELETE_IN_XERO.title}</p>
-            <p className="text-sm leading-snug text-flask-amber-ink">{DELETE_IN_XERO.body}</p>
-          </div>
-        </div>
+        <AmberNote className="mb-4" title={DELETE_IN_XERO.title} body={DELETE_IN_XERO.body} />
       ) : null}
 
       <div className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4">

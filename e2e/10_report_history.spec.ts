@@ -577,22 +577,24 @@ test("Edit reopens the latest report and opens its Opening step, in this app", a
   expect(sent.reopen).toBe(1);
 });
 
-test("Edit on a report in Xero asks first (Flask's confirm); No sends nothing", async ({
-  page,
-}) => {
+test("Edit on a report in Xero asks first, in the page; Cancel sends nothing", async ({ page }) => {
   const sent = await open(page, {
     list: () => listAnswer({ reports: [row({ was_published: true }), ...ROWS.slice(1)] }),
   });
-  const asked: string[] = [];
-  page.once("dialog", (d) => {
-    asked.push(d.message());
+  // never the browser's own dialog (owner, 2026-11-16)
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
     void d.dismiss();
   });
   await (await menu(page, LATEST)).getByRole("menuitem", { name: "Edit" }).click();
-  await expect.poll(() => asked.length).toBe(1);
-  expect(asked[0]).toContain("This report was already published to Xero.");
+  const dialog = page.getByRole("dialog", { name: "Edit Report" });
+  await expect(dialog.getByText("This report was already published to Xero.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
   expect(sent.reopen).toBe(0);
   await expect(page).toHaveURL(new RegExp(`${HISTORY}$`));
+  expect(native).toEqual([]);
 });
 
 test("Delete asks in Flask's modal, deletes, and reads the list again in place", async ({

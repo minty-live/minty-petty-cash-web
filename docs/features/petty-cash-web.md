@@ -478,7 +478,7 @@ What it keeps from Flask:
 Where the app differs:
 
 - **View** opens the report's view in this app. A draft opens its own wizard step here, by the row's `current_section` (Opening when it has none, Flask's `resume_report` rule; `draftStep` in `lib/history.ts`, which reads `sectionStep` in `lib/wizardPages.ts`); Flask's went through its resume page.
-- **Edit** is the report view's (`useEditReport` in `ReportActions.tsx`): Flask's confirm for a report that has been to Xero, `POST /reports/<id>/reopen`, then this app's Opening.
+- **Edit** is the report view's (`useEditReport` in `ReportActions.tsx`): Flask's confirm for a report that has been to Xero, as an in-page modal ("Edit Report", Cancel / Continue - never the browser's own dialog, owner 2026-11-16), `POST /reports/<id>/reopen`, then this app's Opening.
 - **Delete** is the report view's modal, with the owner's "It is in Xero" warning when `was_published`; `DELETE /reports/<id>`, then the list is read again in place with Flask's "That report is deleted." (Flask reloaded the page). A refusal says the API's sentence and keeps the list.
 - **Publish / Republish** is this app's (below, "Publish to Xero"); afterwards the list is read again in place, where Flask reloaded the page.
 - **The empty state shows.** Flask's "No reports found" was in the page but never revealed.

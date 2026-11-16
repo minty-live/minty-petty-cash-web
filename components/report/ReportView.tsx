@@ -146,7 +146,7 @@ function ReportViewBody({
   const [busy, setBusy] = useState<string | null>(null);
   // a ref, not state: a second click in the same frame must see the first one
   const acting = useRef(false);
-  const edit = useEditReport(entityId, entityName, acting);
+  const { edit, ui: editAsk } = useEditReport(entityId, entityName, acting);
   const [editingDetails, setEditingDetails] = useState(false);
   const [lineId, setLineId] = useState<string | null>(null);
   const closeLine = useCallback(() => setLineId(null), []);
@@ -192,6 +192,7 @@ function ReportViewBody({
       ) : null}
       {busy ? <LoadingOverlay text={busy} /> : null}
       {share.link ? <ShareModal url={share.link.url} onClose={share.close} /> : null}
+      {editAsk}
       {confirmDelete ? (
         <DeleteReportModal
           wasPublished={report.was_published}
@@ -289,7 +290,7 @@ function ReportViewBody({
       {may.edit ? (
         <button
           type="button"
-          onClick={() => void edit(report.report_id, report.was_published)}
+          onClick={() => edit(report.report_id, report.was_published)}
           disabled={busy !== null}
           className={`${ACTION} bg-flask-olive hover:bg-flask-olive/80`}
         >

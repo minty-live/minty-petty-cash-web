@@ -162,12 +162,16 @@ export const DELETE_IN_XERO = {
 /** Said on the dashboard after a delete. */
 export const DELETED = "That report's deleted.";
 
-/** Flask's confirm before reopening a report that has been to Xero, word for word. */
-export const EDIT_PUBLISHED_CONFIRM =
-  "This report was already published to Xero.\n\n" +
-  "Editing it and publishing again will create duplicate entries in Xero — " +
-  "the originals are not removed automatically and must be voided in Xero by hand.\n\n" +
-  "Continue?";
+/**
+ * Asked before reopening a report that has been to Xero - Flask's confirm, word for word, now an
+ * in-page modal (no native browser dialog, owner 2026-11-16); "Continue?" is its button.
+ */
+export const EDIT_PUBLISHED = {
+  title: "This report was already published to Xero.",
+  body:
+    "Editing it and publishing again will create duplicate entries in Xero — " +
+    "the originals are not removed automatically and must be voided in Xero by hand.",
+} as const;
 
 /** The API's limit on a line's description (`MAX_DESCRIPTION` in `report_edits.py`). */
 export const MAX_DESCRIPTION = 300;
