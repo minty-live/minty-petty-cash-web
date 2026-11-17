@@ -2,8 +2,8 @@
 
 // COPY of minty-web/components/ui/ConfirmDialog.tsx (here 2026-11-17, from minty-payment-request-web's copy) - lifted into
 // @minty/shared at Part 3 step 4; change every copy (minty-web, minty-payment-request-web, here). Two local changes:
-// the image and tone types live in this file (no lib/changeModal.ts here), and the sentences' grey is written in
-// (#757575, minty-web's --ink-soft; this app has no such token).
+// the image and tone types live in this file (no lib/changeModal.ts here), and its colours are this app's named
+// tokens (Part 13 V-01; app/styles/flask-theme.css, `--color-flask-dialog-*`) with minty-web's values.
 
 /**
  * The confirmation modal's shell (Figma 04-G, section 06 and 06·B): a small white card over the
@@ -32,16 +32,16 @@ export const MODAL_IMAGE: Record<ModalImage, { src: string; width: number; heigh
 };
 
 const CONFIRM_TONE: Record<ConfirmTone, string> = {
-  teal: "bg-[#4fc7c7]",
-  orange: "bg-[#ea9713]",
-  red: "bg-[#dc5a5a]",
+  teal: "bg-flask-dialog-teal",
+  orange: "bg-flask-dialog-orange",
+  red: "bg-flask-dialog-red",
 };
 
 export type BackTone = "grey" | "teal";
 
 const BACK_TONE: Record<BackTone, string> = {
-  grey: "border-[#737a87]/30 font-bold text-black hover:bg-gray-50",
-  teal: "border-[#18c4c7] text-[#4fc7c7] hover:bg-[#f5ffff]",
+  grey: "border-flask-dialog-edge/30 font-bold text-flask-black hover:bg-flask-gray-50",
+  teal: "border-flask-dialog-teal-edge text-flask-dialog-teal hover:bg-flask-dialog-teal-wash",
 };
 
 export function ConfirmDialog({
@@ -88,7 +88,7 @@ export function ConfirmDialog({
       labelledBy={titleId}
       busy={busy}
       onDismiss={dismiss}
-      className="max-w-[435px] rounded-[24px] border border-white/40 bg-white p-12 shadow-[0px_4px_8px_0px_rgba(15,23,42,0.08),0px_12px_32px_0px_rgba(0,0,0,0.1)]"
+      className="max-w-[435px] rounded-[24px] border border-flask-white/40 bg-flask-white p-12 shadow-flask-dialog"
     >
       {/*
           The company sits in the TITLE's column, tight under the last line of it and no wider
@@ -100,7 +100,7 @@ export function ConfirmDialog({
         */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h2 id={titleId} className="text-[26px] font-bold leading-tight text-black">
+          <h2 id={titleId} className="text-[26px] font-bold leading-tight text-flask-black">
             {title}
           </h2>
           {/*
@@ -111,13 +111,13 @@ export function ConfirmDialog({
           {lead !== undefined ? (
             <div className="mt-4 text-[15px] leading-snug break-words">{lead}</div>
           ) : entityName ? (
-            <p className="mt-4 text-[15px] leading-snug break-words text-[#737a87]">
+            <p className="mt-4 text-[15px] leading-snug break-words text-flask-dialog-edge">
               Entity
               <br />
               {/* The COMPANY is coloured, the label above it is not: "Entity" is furniture,
                     the name is the thing the modal is about. (It was one grey for a while -
                     that reading of the design's single text node is superseded.) */}
-              <span className="text-[#18c4c7]">{entityName}</span>
+              <span className="text-flask-dialog-teal-edge">{entityName}</span>
             </p>
           ) : null}
         </div>
@@ -132,7 +132,7 @@ export function ConfirmDialog({
           className="-mr-3 -mt-2 w-auto shrink-0"
         />
       </div>
-      <div className="mt-6 flex flex-col gap-4 text-[15px] leading-snug text-[#757575]">
+      <div className="mt-6 flex flex-col gap-4 text-[15px] leading-snug text-flask-dialog-body">
         {children}
       </div>
       {/*
@@ -150,7 +150,7 @@ export function ConfirmDialog({
             onClick={onBack}
             disabled={busy}
             data-tone={backTone}
-            className={`h-[66px] flex-1 rounded-[14px] border bg-white text-lg leading-tight disabled:opacity-60 ${BACK_TONE[backTone]}`}
+            className={`h-[66px] flex-1 rounded-[14px] border bg-flask-white text-lg leading-tight disabled:opacity-60 ${BACK_TONE[backTone]}`}
           >
             {backLabel}
           </button>
@@ -163,7 +163,7 @@ export function ConfirmDialog({
           data-tone={confirmTone}
           // the transparent border matters: with `flex-1` the bordered button beside it would
           // otherwise end up 2px wider, both being basis-0 under border-box
-          className={`h-[66px] rounded-[14px] border border-transparent text-lg font-bold leading-tight text-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60 ${
+          className={`h-[66px] rounded-[14px] border border-transparent text-lg font-bold leading-tight text-flask-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60 ${
             hideBack ? "w-[169px]" : "flex-1"
           } ${CONFIRM_TONE[confirmTone]}`}
         >
