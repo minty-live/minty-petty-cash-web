@@ -85,11 +85,11 @@ describe("SalesStep -- the parts", () => {
     expect(save?.[1]).toMatchObject({ json: { cash_sales: 0 } });
   });
 
-  it("a retail shop that ticked Delivery shows Non-cash Sales and Delivery Sales", async () => {
+  it("a retail shop that ticked Delivery shows Electronic Payments and Delivery Sales", async () => {
     renderWith(
       page({ groups: "non_cash", parts: { cash: true, electronic: true, delivery: true } }),
     );
-    expect(await screen.findByText("Non-cash Sales")).toBeInTheDocument();
+    expect(await screen.findByText("Electronic Payments")).toBeInTheDocument();
     expect(screen.getByText("Delivery Sales")).toBeInTheDocument();
   });
 });

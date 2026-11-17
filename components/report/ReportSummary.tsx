@@ -229,11 +229,12 @@ function TotalSales({ sales, yesterday }: { sales: SummarySales; yesterday: numb
       <path d={UP_ARROW} className={compare.up ? "fill-flask-green" : "fill-flask-red-500"} />
     </svg>
   );
-  // A retail shop, a service or a general business: Non-cash and Cash (owner, 2026-11-11)
+  // A retail shop, a service or a general business: Electronic and Cash (owner, 2026-11-11; named
+  // after the sales account since 2026-11-17)
   const totals: [string, number][] =
     sales.groups === "non_cash"
       ? [
-          ["Non-cash Sales", split.electronic],
+          ["Electronic Sales", split.electronic],
           ["Cash Sales", split.cash],
         ]
       : [

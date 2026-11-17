@@ -118,8 +118,6 @@ function SalesForm({
   const code = page.currency_code;
   const day = page.transaction_date;
   const progress = page.draft ?? { current_section: null, completed_sections: [] };
-  // One Non-cash section for a retail shop, a service or a general business (owner, 2026-11-11)
-  const nonCash = page.groups === "non_cash";
   // Only the parts whose sales account is ticked in onboarding (owner, 2026-11-17; Figma 464:73 row 3)
   const parts = partsOf(page);
   const { electronic, delivery } = sections(page.methods, page.groups, parts);
@@ -222,16 +220,12 @@ function SalesForm({
       >
         <div className="mb-6 rounded-flask-lg bg-flask-white p-6 shadow-flask-sm">
           {parts.electronic ? (
-            <Section
-              icon={<CardIcon />}
-              title={nonCash ? "Non-cash Sales" : "Electronic Payments"}
-              smallTitle
-            >
+            <Section icon={<CardIcon />} title="Electronic Payments" smallTitle>
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {electronic.map(field)}
               </div>
               <Total
-                label={nonCash ? "Total Non-cash Sales" : "Total Electronic Payment Sales"}
+                label="Total Electronic Payment Sales"
                 amount={formatMoney(totals.electronic, code)}
               />
             </Section>

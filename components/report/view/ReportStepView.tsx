@@ -494,14 +494,10 @@ function SalesView({ report }: { report: DailyReport }) {
     <>
       <Title>Sales Entry</Title>
       <div className={CARD}>
-        <Section
-          icon={<CardIcon />}
-          title={nonCash ? "Non-cash Sales" : "Electronic Payments"}
-          smallTitle
-        >
+        <Section icon={<CardIcon />} title="Electronic Payments" smallTitle>
           <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">{electronic.map(field)}</div>
           <Total
-            label={nonCash ? "Total Non-cash Sales" : "Total Electronic Payment Sales"}
+            label="Total Electronic Payment Sales"
             amount={formatMoney(sum(electronic), code)}
           />
         </Section>
