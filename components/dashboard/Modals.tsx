@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { useAmountInput } from "@minty/shared/amountInput";
 
 import { FieldMessage } from "@/components/report/ReportChrome";
+import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { parseMoney } from "@/lib/currencyInput";
 import { CHOOSE_CURRENCY } from "@/lib/dashboard";
 import { formatDay } from "@/lib/dates";
@@ -380,7 +381,8 @@ export function DepositModal({
 }
 
 /**
- * Flask's "Setup Required" (#setupSettingsModal), exactly: it cannot be dismissed - the only way on is the settings.
+ * "Setup Required" (Flask's #setupSettingsModal) on minty-web's dialog (owner, 2026-11-17: every question in its
+ * design): it cannot be dismissed - the only way on is the settings.
  * `missing` is lib/dashboard.ts `setupMissing`; its currency line links to minty-web's General tab
  * (`currencyHref`), the one place the country and currency are set (owner, 2026-11-03), and Set Up Settings to
  * the hub's Petty Cash Settings tab for the rest (both in the hub since 2026-11-10).
@@ -394,45 +396,36 @@ export function SetupRequiredModal({
   settingsHref: string;
   currencyHref: string;
 }) {
+  const stay = () => undefined; // it cannot be dismissed: the only way on is the settings
   return (
-    <Frame title="Setup Required" z="z-50">
-      <div className="mb-6">
-        <h2 className="text-xl font-bold text-flask-gray-900">Setup Required</h2>
-        <p className="mt-2 text-sm text-flask-gray-600">
-          Please complete your entity settings before proceeding.
-        </p>
+    <QuestionDialog
+      title="Setup Required"
+      image="dont"
+      busy={false}
+      hideBack
+      confirmLabel="Set Up Settings"
+      confirmHref={settingsHref}
+      onConfirm={stay}
+      onBack={stay}
+      onDismiss={stay}
+    >
+      <p>Please complete your entity settings before proceeding.</p>
+      <div>
+        <p className="mb-2 font-semibold">Missing Settings:</p>
+        <ul className="list-inside list-disc space-y-1">
+          {missing.map((m) => (
+            <li key={m}>
+              {m === CHOOSE_CURRENCY ? (
+                <a href={currencyHref} className="underline">
+                  {m}
+                </a>
+              ) : (
+                m
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
-      <div className="space-y-4">
-        <div className="rounded-flask-lg border-l-4 border-l-flask-amber bg-flask-amber-bg p-4">
-          <div className="flex items-start">
-            <div className="flex-shrink-0">{NOTE_ICON("text-flask-amber")}</div>
-            <div className="ml-3 flex-1">
-              <p className="mb-2 text-sm font-semibold text-flask-amber-ink">Missing Settings:</p>
-              <ul className="list-inside list-disc space-y-1 text-sm text-flask-amber-ink">
-                {missing.map((m) => (
-                  <li key={m}>
-                    {m === CHOOSE_CURRENCY ? (
-                      <a href={currencyHref} className="underline">
-                        {m}
-                      </a>
-                    ) : (
-                      m
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="mt-6">
-        <a
-          href={settingsHref}
-          className="flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
-        >
-          Set Up Settings
-        </a>
-      </div>
-    </Frame>
+    </QuestionDialog>
   );
 }

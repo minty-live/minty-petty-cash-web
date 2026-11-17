@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } fro
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { AddExpenseCard } from "@/components/report/AddExpenseCard";
 import {
   ReceiptViewer,
@@ -700,84 +701,17 @@ function DeleteExpenseModal({
   onDelete: () => void;
 }) {
   return (
-    <Modal
-      titleId="deleteExpenseTitle"
-      onClose={onCancel}
-      className="rounded-flask-lg bg-flask-white p-6"
+    <QuestionDialog
+      title="Delete Expense"
+      image="dont"
+      busy={false}
+      confirmLabel="Delete"
+      confirmTone="red"
+      backLabel="Cancel"
+      onConfirm={onDelete}
+      onBack={onCancel}
     >
-      <div className="mb-6 flex items-center justify-between">
-        <h2 id="deleteExpenseTitle" className="text-xl font-bold text-flask-gray-900">
-          Delete Expense
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Close"
-          className="text-flask-gray-400 hover:text-flask-gray-600"
-        >
-          <svg
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2"
-              d="M6 18L18 6M6 6l12 12"
-            />
-          </svg>
-        </button>
-      </div>
-
-      <div className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="2"
-              stroke="currentColor"
-              className="h-5 w-5 text-flask-danger"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-              />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm text-flask-danger-ink">
-              <span className="font-bold">Warning:</span>
-            </p>
-            <p className="mt-1 text-sm text-flask-danger-ink">
-              Are you sure you want to delete this expense? This action cannot be undone.
-            </p>
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex-1 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
-        >
-          Delete
-        </button>
-      </div>
-    </Modal>
+      <p>Are you sure you want to delete this expense? This action cannot be undone.</p>
+    </QuestionDialog>
   );
 }

@@ -512,8 +512,8 @@ test("a line is deleted through Flask's modal, and a refusal says the server's s
     },
   });
   await page.getByRole("button", { name: "Delete expense" }).first().click();
+  // minty-web's question dialog (owner, 2026-11-17): the sentence, no "Warning:" label
   const dialog = page.getByRole("dialog", { name: "Delete Expense" });
-  await expect(dialog).toContainText("Warning:");
   await expect(dialog).toContainText(
     "Are you sure you want to delete this expense? This action cannot be undone.",
   );

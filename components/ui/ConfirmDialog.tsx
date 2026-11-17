@@ -1,9 +1,10 @@
 "use client";
 
 // COPY of minty-web/components/ui/ConfirmDialog.tsx (here 2026-11-17, from minty-payment-request-web's copy) - lifted into
-// @minty/shared at Part 3 step 4; change every copy (minty-web, minty-payment-request-web, here). Two local changes:
-// the image and tone types live in this file (no lib/changeModal.ts here), and its colours are this app's named
-// tokens (Part 13 V-01; app/styles/flask-theme.css, `--color-flask-dialog-*`) with minty-web's values.
+// @minty/shared at Part 3 step 4; change every copy (minty-web, minty-payment-request-web, here). Three local changes:
+// the image and tone types live in this file (no lib/changeModal.ts here), its colours are this app's named
+// tokens (Part 13 V-01; app/styles/flask-theme.css, `--color-flask-dialog-*`) with minty-web's values, and
+// `confirmHref` draws the confirm as a link where the way on is another page (Setup Required, Reconnect Xero).
 
 /**
  * The confirmation modal's shell (Figma 04-G, section 06 and 06·B): a small white card over the
@@ -55,6 +56,7 @@ export function ConfirmDialog({
   backLabel = "Go back",
   backTone = "grey",
   hideBack = false,
+  confirmHref,
   onConfirm,
   onBack,
   onDismiss,
@@ -73,6 +75,8 @@ export function ConfirmDialog({
   backTone?: BackTone;
   /** One button only (a result to acknowledge): no secondary. */
   hideBack?: boolean;
+  /** The confirm is a link to another page (still drawn as the button). */
+  confirmHref?: string;
   onConfirm: () => void;
   onBack: () => void;
   /** Escape and the backdrop, when the secondary button is not the safe way out. */
@@ -155,20 +159,33 @@ export function ConfirmDialog({
             {backLabel}
           </button>
         )}
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={busy}
-          aria-busy={busy || undefined}
-          data-tone={confirmTone}
-          // the transparent border matters: with `flex-1` the bordered button beside it would
-          // otherwise end up 2px wider, both being basis-0 under border-box
-          className={`h-[66px] rounded-[14px] border border-transparent text-lg font-bold leading-tight text-flask-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60 ${
-            hideBack ? "w-[169px]" : "flex-1"
-          } ${CONFIRM_TONE[confirmTone]}`}
-        >
-          {confirmLabel}
-        </button>
+        {confirmHref ? (
+          <a
+            href={confirmHref}
+            onClick={onConfirm}
+            data-tone={confirmTone}
+            className={`flex items-center justify-center text-center h-[66px] rounded-[14px] border border-transparent text-lg font-bold leading-tight text-flask-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60 ${
+              hideBack ? "w-[169px]" : "flex-1"
+            } ${CONFIRM_TONE[confirmTone]}`}
+          >
+            {confirmLabel}
+          </a>
+        ) : (
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={busy}
+            aria-busy={busy || undefined}
+            data-tone={confirmTone}
+            // the transparent border matters: with `flex-1` the bordered button beside it would
+            // otherwise end up 2px wider, both being basis-0 under border-box
+            className={`h-[66px] rounded-[14px] border border-transparent text-lg font-bold leading-tight text-flask-white hover:opacity-90 disabled:cursor-wait disabled:opacity-60 ${
+              hideBack ? "w-[169px]" : "flex-1"
+            } ${CONFIRM_TONE[confirmTone]}`}
+          >
+            {confirmLabel}
+          </button>
+        )}
       </div>
     </ModalFrame>
   );

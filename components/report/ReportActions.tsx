@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 
 import { useToast } from "@/components/flask/Toasts";
 import { ReconnectModal } from "@/components/report/Publish";
+import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { Modal } from "@/components/report/ReportChrome";
 import { ApiError, HOUSE_FALLBACK, pettyCashFetch } from "@/lib/apiClient";
 import {
@@ -25,24 +26,6 @@ type Reopened = { report_id: string; transaction_date: string; status: "draft"; 
 const CLOSE_ICON = (
   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const NOTE_ICON = (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth="2"
-    stroke="currentColor"
-    className="h-5 w-5 text-flask-danger"
-    aria-hidden="true"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-    />
   </svg>
 );
 
@@ -189,44 +172,18 @@ function EditPublishedModal({
   onContinue: () => void;
 }) {
   return (
-    <Modal
-      titleId="editReportTitle"
-      onClose={onCancel}
-      className="rounded-flask-lg bg-flask-white p-6"
+    <QuestionDialog
+      title="Edit Report"
+      image="dont"
+      busy={false}
+      confirmLabel="Continue"
+      backLabel="Cancel"
+      onConfirm={onContinue}
+      onBack={onCancel}
     >
-      <div className="mb-6 flex items-center justify-between">
-        <h2 id="editReportTitle" className="text-xl font-bold text-flask-gray-900">
-          Edit Report
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Close"
-          className="text-flask-gray-400 hover:text-flask-gray-600"
-        >
-          {CLOSE_ICON}
-        </button>
-      </div>
-
-      <AmberNote className="mb-6" title={EDIT_PUBLISHED.title} body={EDIT_PUBLISHED.body} />
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onContinue}
-          className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
-        >
-          <span>Continue</span>
-        </button>
-      </div>
-    </Modal>
+      <p className="font-semibold">{EDIT_PUBLISHED.title}</p>
+      <p>{EDIT_PUBLISHED.body}</p>
+    </QuestionDialog>
   );
 }
 
@@ -398,74 +355,35 @@ export function DeleteReportModal({
   onDelete: () => void;
 }) {
   return (
-    <Modal
-      titleId="deleteReportTitle"
-      onClose={onCancel}
-      className="rounded-flask-lg bg-flask-white p-6"
+    <QuestionDialog
+      title="Delete Report"
+      image="dont"
+      busy={false}
+      confirmLabel={refusal ? "Try again" : "Delete"}
+      confirmTone="red"
+      backLabel="Cancel"
+      onConfirm={onDelete}
+      onBack={onCancel}
     >
-      <div className="mb-6 flex items-center justify-between">
-        <h2 id="deleteReportTitle" className="text-xl font-bold text-flask-gray-900">
-          Delete Report
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Close"
-          className="text-flask-gray-400 hover:text-flask-gray-600"
-        >
-          {CLOSE_ICON}
-        </button>
-      </div>
-
       {xero ? (
-        <AmberNote className="mb-4" title={DELETE_IN_XERO.title} body={DELETE_IN_XERO[xero]} />
-      ) : null}
-
-      <div
-        className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4"
-        role={refusal ? "alert" : undefined}
-      >
-        <div className="flex items-start">
-          <div className="flex-shrink-0">{NOTE_ICON}</div>
-          <div className="ml-3 min-w-0">
-            {refusal ? (
-              <>
-                <p className="text-sm text-flask-danger-ink">{refusal.message}</p>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-flask-danger-ink [overflow-wrap:anywhere]">
-                  {refusal.reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-flask-danger-ink">
-                  <span className="font-bold">Warning:</span>
-                </p>
-                <p className="mt-1 text-sm text-flask-danger-ink">{DELETE_WARNING}</p>
-              </>
-            )}
-          </div>
+        <div>
+          <p className="font-semibold">{DELETE_IN_XERO.title}</p>
+          <p>{DELETE_IN_XERO[xero]}</p>
         </div>
-      </div>
-
-      <div className="flex gap-3">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="flex-1 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
-        >
-          <span>{refusal ? "Try again" : "Delete"}</span>
-        </button>
-      </div>
-    </Modal>
+      ) : null}
+      {refusal ? (
+        <div role="alert">
+          <p>{refusal.message}</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 [overflow-wrap:anywhere]">
+            {refusal.reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p>{DELETE_WARNING}</p>
+      )}
+    </QuestionDialog>
   );
 }
 

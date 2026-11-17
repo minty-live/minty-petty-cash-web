@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useToast } from "@/components/flask/Toasts";
-import { Modal } from "@/components/report/ReportChrome";
+import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import {
   PUBLISH_WORDS,
   partialMessage,
@@ -23,30 +23,6 @@ export type PublishAsk = { reportId: string; confirm: null | { inXero: boolean }
 export const REPUBLISH_IN_XERO =
   "This report is in Xero. Publishing again updates its entries there.";
 
-const CLOSE_ICON = (
-  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
-  </svg>
-);
-
-const NOTE_ICON = (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth="2"
-    stroke="currentColor"
-    className="h-5 w-5 text-flask-danger"
-    aria-hidden="true"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M12 9v3.75m9-.75a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-9 3.75h.008v.008H12v-.008Z"
-    />
-  </svg>
-);
-
 const SPINNER_PATH =
   "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z";
 const CANCEL =
@@ -54,11 +30,16 @@ const CANCEL =
 const CONFIRM =
   "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80";
 
+/** A partly published report re-sent from history: only what failed goes (2026-11-17). */
+export const REPUBLISH_MISSING =
+  "Some of this report didn't reach Xero. Publishing again sends only what's missing.";
+
 /**
- * Flask's "Republish Report" (#republishReportModal), each page's own question: the Submitted page
- * always says the report is in Xero; report history only for a report fully in Xero (a partly
- * published one is re-sent selectively), then "Still want to go ahead?". Cancel / Confirm. Flask
- * warned of duplicate entries; a republish now updates the report's entries in Xero (2026-11-17).
+ * "Republish Report" on minty-web's `ConfirmDialog` (owner's rule: every app's modals follow
+ * minty-web's design; 2026-11-17, when a partly published report's confirm showed its question
+ * alone in a red box). What the publish will do, then each page's own question (Flask's): the
+ * Submitted page's report is in Xero; report history's is in Xero (fully) or partly published (only
+ * what's missing is sent). Cancel / Confirm; Escape and the backdrop cancel (QuestionDialog).
  */
 export function RepublishModal({
   place,
@@ -72,55 +53,18 @@ export function RepublishModal({
   onConfirm: () => void;
 }) {
   return (
-    <Modal
-      titleId="republishReportTitle"
-      onClose={onCancel}
-      className="rounded-flask-lg bg-flask-white p-6"
+    <QuestionDialog
+      title="Republish Report"
+      image="dont"
+      busy={false}
+      confirmLabel="Confirm"
+      backLabel="Cancel"
+      onConfirm={onConfirm}
+      onBack={onCancel}
     >
-      <div className="relative mb-6 flex items-center justify-center">
-        <h2 id="republishReportTitle" className="text-xl font-bold text-flask-gray-900">
-          Republish Report
-        </h2>
-        <button
-          type="button"
-          onClick={onCancel}
-          aria-label="Close"
-          className="absolute right-0 text-flask-gray-400 hover:text-flask-gray-600"
-        >
-          {CLOSE_ICON}
-        </button>
-      </div>
-
-      <div className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">{NOTE_ICON}</div>
-          <div className="ml-3">
-            {place === "submitted" ? (
-              <>
-                <p className="text-sm text-flask-danger-ink">{REPUBLISH_IN_XERO}</p>
-                <p className="mt-2 text-sm text-flask-danger-ink">Do you wish to continue?</p>
-              </>
-            ) : (
-              <>
-                {inXero ? (
-                  <p className="text-sm text-flask-danger-ink">{REPUBLISH_IN_XERO}</p>
-                ) : null}
-                <p className="mt-2 text-sm text-flask-danger-ink">Still want to go ahead?</p>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div className="flex gap-3">
-        <button type="button" onClick={onCancel} className={CANCEL}>
-          Cancel
-        </button>
-        <button type="button" onClick={onConfirm} className={CONFIRM}>
-          <span>Confirm</span>
-        </button>
-      </div>
-    </Modal>
+      <p>{place === "submitted" || inXero ? REPUBLISH_IN_XERO : REPUBLISH_MISSING}</p>
+      <p>{place === "submitted" ? "Do you wish to continue?" : "Still want to go ahead?"}</p>
+    </QuestionDialog>
   );
 }
 
@@ -242,42 +186,18 @@ export function ReconnectModal({
   onClose: () => void;
 }) {
   return (
-    <Modal
-      titleId="reconnectXeroTitle"
-      onClose={onClose}
-      className="rounded-flask-lg bg-flask-white p-6"
+    <QuestionDialog
+      title="Reconnect Xero"
+      image="dont"
+      busy={false}
+      confirmLabel="Reconnect Xero in Integration"
+      confirmHref={settingsTabUrl(entityId, entityName, "integration")}
+      backLabel="Close"
+      onConfirm={() => undefined}
+      onBack={onClose}
     >
-      <div className="relative mb-6 flex items-center justify-center">
-        <h2 id="reconnectXeroTitle" className="text-xl font-bold text-flask-gray-900">
-          Reconnect Xero
-        </h2>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute right-0 text-flask-gray-400 hover:text-flask-gray-600"
-        >
-          {CLOSE_ICON}
-        </button>
-      </div>
-      <div className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4">
-        <div className="flex items-start">
-          <div className="flex-shrink-0">{NOTE_ICON}</div>
-          <p className="ml-3 text-sm text-flask-danger-ink">{message}</p>
-        </div>
-      </div>
-      <div className="flex gap-3">
-        <button type="button" onClick={onClose} className={CANCEL}>
-          Close
-        </button>
-        <a
-          href={settingsTabUrl(entityId, entityName, "integration")}
-          className={`${CONFIRM} text-center`}
-        >
-          Reconnect Xero in Integration
-        </a>
-      </div>
-    </Modal>
+      <p>{message}</p>
+    </QuestionDialog>
   );
 }
 

@@ -484,12 +484,19 @@ test("History: Republish confirms - saying it is in Xero only for a report fully
   ).toBeVisible();
   await expect(dialog.getByText(/duplicate/)).toHaveCount(0);
   await expect(dialog.getByText("Still want to go ahead?")).toBeVisible();
-  await dialog.getByRole("button", { name: "Close" }).click();
+  await expectNoHorizontalScroll(page);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
   expect(sent.publish).toEqual([]);
 
-  // a failed (partly published) one is re-sent selectively: no "in Xero" line
+  // a failed (partly published) one is re-sent selectively: it says so (2026-11-17: the question
+  // stood alone in a red box), never "in Xero"
   await fromMenu(page, FAILED, "Republish");
   dialog = page.getByRole("dialog", { name: "Republish Report" });
+  await expect(
+    dialog.getByText(
+      "Some of this report didn't reach Xero. Publishing again sends only what's missing.",
+    ),
+  ).toBeVisible();
   await expect(dialog.getByText("Still want to go ahead?")).toBeVisible();
   await expect(dialog.getByText(/This report is in Xero/)).toHaveCount(0);
   await dialog.getByRole("button", { name: "Confirm" }).click();
