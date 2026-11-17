@@ -502,7 +502,7 @@ test("Publish; Republish for one in Xero or failed; a draft's is greyed; none wi
       }),
   });
   let items = await menu(page, LATEST);
-  await expect(items.getByRole("menuitem")).toHaveText(["Edit", "Delete", "View", "Publish"]);
+  await expect(items.getByRole("menuitem")).toHaveText(["View", "Publish", "Edit", "Delete"]);
   await expect(items.getByRole("menuitem", { name: "Publish" })).toHaveAttribute(
     "title",
     "Publish to Xero",
@@ -529,7 +529,7 @@ test("Publish; Republish for one in Xero or failed; a draft's is greyed; none wi
   await page.unrouteAll({ behavior: "ignoreErrors" });
   await open(page, { list: () => listAnswer({ can_publish: false }) });
   items = await menu(page, LATEST);
-  await expect(items.getByRole("menuitem")).toHaveText(["Edit", "Delete", "View"]);
+  await expect(items.getByRole("menuitem")).toHaveText(["View", "Edit", "Delete"]);
 });
 
 test("a draft opened from the list: its step's Back returns to the list, dates kept", async ({
@@ -577,6 +577,51 @@ test("Edit reopens the latest report and opens its Opening step, in this app", a
   expect(sent.reopen).toBe(1);
 });
 
+test("Edit on an older report opens its view in Edit Details, in this app; the latest reopens; never on a draft", async ({
+  page,
+}) => {
+  const sent = await open(page, {
+    list: () =>
+      listAnswer({
+        reports: [
+          row({ permissions: { edit: true, delete: true, edit_details: false } }),
+          { ...ROWS[1], permissions: { edit: false, delete: false, edit_details: true } },
+          row({
+            id: DRAFT,
+            transaction_date: "2026-10-09",
+            status: "draft",
+            status_label: "Draft",
+            status_tone: "neutral",
+            current_section: "sales",
+            permissions: { edit: false, delete: false, edit_details: false },
+          }),
+        ],
+      }),
+  });
+  // the latest report: Edit reopens it (a button, not a link to Edit Details)
+  let items = await menu(page, LATEST);
+  await expect(items.getByRole("menuitem")).toHaveText(["View", "Publish", "Edit", "Delete"]);
+  await expect(items.getByRole("menuitem", { name: "Edit", exact: true })).not.toHaveAttribute(
+    "href",
+    /.*/,
+  );
+  await entry(page, LATEST).getByRole("button", { name: "Actions" }).click();
+  await expect(entry(page, LATEST).getByRole("menu")).toHaveCount(0);
+
+  items = await menu(page, DRAFT);
+  await expect(items.getByRole("menuitem")).toHaveText(["View", "Publish"]);
+  await entry(page, DRAFT).getByRole("button", { name: "Actions" }).click();
+
+  // an older report: Edit opens its view in Edit Details
+  items = await menu(page, PUBLISHED);
+  await expect(items.getByRole("menuitem")).toHaveText(["View", "Republish", "Edit"]);
+  const details = items.getByRole("menuitem", { name: "Edit", exact: true });
+  await expect(details).toHaveAttribute("href", `${HISTORY}/${PUBLISHED}/summary?edit=details`);
+  await details.click();
+  await expect(page).toHaveURL(new RegExp(`${HISTORY}/${PUBLISHED}/summary`));
+  expect(sent.reopen).toBe(0);
+});
+
 test("Edit on a report in Xero asks first, in the page; Cancel sends nothing", async ({ page }) => {
   const sent = await open(page, {
     list: () => listAnswer({ reports: [row({ was_published: true }), ...ROWS.slice(1)] }),
@@ -589,7 +634,12 @@ test("Edit on a report in Xero asks first, in the page; Cancel sends nothing", a
   });
   await (await menu(page, LATEST)).getByRole("menuitem", { name: "Edit" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit Report" });
-  await expect(dialog.getByText("This report was already published to Xero.")).toBeVisible();
+  await expect(dialog.getByText("This report is in Xero.", { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByText("Your changes reach Xero only when you publish the report again."),
+  ).toBeVisible();
+  // a republish updates the report's entries in Xero (owner, 2026-11-17): no duplicates warning
+  await expect(dialog.getByText(/duplicate/)).toHaveCount(0);
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
   expect(sent.reopen).toBe(0);
@@ -628,7 +678,7 @@ test("Delete on a report that has been to Xero warns first; Cancel sends nothing
     list: () =>
       listAnswer({
         reports: [
-          row({ was_published: true, status_label: "Published to Xero" }),
+          row({ was_published: true, xero_removable: true, status_label: "Published to Xero" }),
           ...ROWS.slice(1),
         ],
       }),
@@ -638,13 +688,41 @@ test("Delete on a report that has been to Xero warns first; Cancel sends nothing
   await expect(dialog.getByText("It is in Xero", { exact: true })).toBeVisible();
   await expect(
     dialog.getByText(
-      "Deleting it here does not remove its entries in Xero, and publishing this day again adds a second copy. To change the report, use Edit report instead.",
+      "Deleting it here also removes its entries from Xero. If Xero refuses any of them, the report is kept and I'll list what to sort out in Xero first.",
     ),
   ).toBeVisible();
   await expectNoHorizontalScroll(page);
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
   expect(sent.delete).toBe(0);
+});
+
+test("Xero refusing a removal keeps the row; the modal lists what to sort out", async ({
+  page,
+}) => {
+  const kept =
+    "Xero didn't let me remove this report's entries, so I've kept the report. Sort these out in Xero, then delete it again.";
+  const reasons = ["Bank deposit: it's reconciled in Xero. Unreconcile it in Xero first."];
+  const sent = await open(page, {
+    list: () =>
+      listAnswer({
+        reports: [
+          row({ was_published: true, xero_removable: true, status_label: "Published to Xero" }),
+          ...ROWS.slice(1),
+        ],
+      }),
+    onDelete: (route) => route.fulfill({ status: 409, json: { error: kept, reasons } }),
+  });
+  const lists = sent.lists.length;
+  await (await menu(page, LATEST)).getByRole("menuitem", { name: "Delete" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete Report" });
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(dialog.getByText(kept)).toBeVisible();
+  await expect(dialog.getByRole("listitem")).toHaveText(reasons);
+  await expect(dialog.getByRole("button", { name: "Try again" })).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  expect(sent.lists.length).toBe(lists);
+  await expect(entry(page, LATEST)).toBeVisible();
 });
 
 test("a refused Delete says the API's sentence and keeps the list", async ({ page }) => {

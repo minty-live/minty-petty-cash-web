@@ -16,8 +16,12 @@ import { settingsTabUrl } from "@/lib/settings";
 /** Where the publish was started: Flask's two pages word their modal and their toasts differently. */
 export type PublishPlace = "submitted" | "history";
 
-/** A publish asked for: straight away, or after the republish confirm (`duplicate`: warn of duplicates). */
-export type PublishAsk = { reportId: string; confirm: null | { duplicate: boolean } };
+/** A publish asked for: straight away, or after the republish confirm (`inXero`: say it is in Xero). */
+export type PublishAsk = { reportId: string; confirm: null | { inXero: boolean } };
+
+/** A republish updates the report's entries in Xero (owner, 2026-11-17; no duplicates). */
+export const REPUBLISH_IN_XERO =
+  "This report is in Xero. Publishing again updates its entries there.";
 
 const CLOSE_ICON = (
   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -51,18 +55,19 @@ const CONFIRM =
   "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80";
 
 /**
- * Flask's "Republish Report" (#republishReportModal), each page's own words: the Submitted page
- * always warns of duplicates; report history only for a report fully in Xero (a partly published
- * one is re-sent selectively), then "Still want to go ahead?". Cancel / Confirm.
+ * Flask's "Republish Report" (#republishReportModal), each page's own question: the Submitted page
+ * always says the report is in Xero; report history only for a report fully in Xero (a partly
+ * published one is re-sent selectively), then "Still want to go ahead?". Cancel / Confirm. Flask
+ * warned of duplicate entries; a republish now updates the report's entries in Xero (2026-11-17).
  */
 export function RepublishModal({
   place,
-  duplicate,
+  inXero,
   onCancel,
   onConfirm,
 }: {
   place: PublishPlace;
-  duplicate: boolean;
+  inXero: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -92,19 +97,13 @@ export function RepublishModal({
           <div className="ml-3">
             {place === "submitted" ? (
               <>
-                <p className="text-sm text-flask-danger-ink">
-                  This report was previously published. This action may create duplicate entries in
-                  Xero.
-                </p>
+                <p className="text-sm text-flask-danger-ink">{REPUBLISH_IN_XERO}</p>
                 <p className="mt-2 text-sm text-flask-danger-ink">Do you wish to continue?</p>
               </>
             ) : (
               <>
-                {duplicate ? (
-                  <p className="text-sm text-flask-danger-ink">
-                    I&apos;ve already published this report — republishing may create duplicates in
-                    Xero.
-                  </p>
+                {inXero ? (
+                  <p className="text-sm text-flask-danger-ink">{REPUBLISH_IN_XERO}</p>
                 ) : null}
                 <p className="mt-2 text-sm text-flask-danger-ink">Still want to go ahead?</p>
               </>
@@ -231,7 +230,7 @@ function PublishingOverlay({
  * minty-web's Integration tab, so the API's sentence comes with a full-page link there,
  * through accounts-api's hand-off. Flask only toasted it.
  */
-function ReconnectModal({
+export function ReconnectModal({
   message,
   entityId,
   entityName,
@@ -300,7 +299,7 @@ export function usePublish({
   onChanged: () => void;
 }) {
   const toast = useToast();
-  const [confirm, setConfirm] = useState<{ reportId: string; duplicate: boolean } | null>(null);
+  const [confirm, setConfirm] = useState<{ reportId: string; inXero: boolean } | null>(null);
   const [running, setRunning] = useState<{
     reportId: string;
     republish: boolean;
@@ -387,7 +386,7 @@ export function usePublish({
   const ask = useCallback(
     (what: PublishAsk) => {
       if (cancel.current) return;
-      if (what.confirm) setConfirm({ reportId: what.reportId, duplicate: what.confirm.duplicate });
+      if (what.confirm) setConfirm({ reportId: what.reportId, inXero: what.confirm.inXero });
       else go(what.reportId, false, true);
     },
     [go],
@@ -398,7 +397,7 @@ export function usePublish({
       {confirm ? (
         <RepublishModal
           place={place}
-          duplicate={confirm.duplicate}
+          inXero={confirm.inXero}
           onCancel={() => setConfirm(null)}
           onConfirm={() => {
             setConfirm(null);

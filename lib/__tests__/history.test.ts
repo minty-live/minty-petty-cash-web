@@ -40,8 +40,9 @@ const row = (over: Partial<HistoryRow> = {}): HistoryRow => ({
   published_at: null,
   created_at: "2026-10-13T01:30:00+00:00",
   was_published: false,
+  xero_removable: false,
   publish_reasons: [],
-  permissions: { edit: false, delete: false },
+  permissions: { edit: false, delete: false, edit_details: false },
   ...over,
 });
 

@@ -262,6 +262,223 @@ test("Cash Count: the counts, the safebox, the shortage and its reason, all lock
   expect(writes).toEqual([]);
 });
 
+// ---- Edit Details on the step pages (owner, 2026-11-17): beside the summary's, the same edits ----
+
+/** The three edits' answers: each the whole Daily Report, with the saved detail. */
+async function stubEdits(page: Page) {
+  const sent: { method: string; path: string; body: string | null }[] = [];
+  await page.route(`${API}/reports/${REPORT}/**`, async (route) => {
+    const req = route.request();
+    const path = new URL(req.url()).pathname;
+    if (req.method() === "GET") return route.fallback();
+    sent.push({ method: req.method(), path, body: req.postData() });
+    if (path.endsWith("/withdrawal")) {
+      const base = reportAnswer();
+      return route.fulfill({
+        json: reportAnswer({
+          cash: { ...(base.cash as Json), cash_addition_type: "personal" },
+        }),
+      });
+    }
+    if (path.endsWith("/difference-reason")) {
+      const base = reportAnswer();
+      const cash = base.cash as Json;
+      return route.fulfill({
+        json: reportAnswer({
+          cash: {
+            ...cash,
+            difference: { ...(cash.difference as Json), reason: "Courier and parking" },
+          },
+        }),
+      });
+    }
+    return route.fulfill({ json: reportAnswer() });
+  });
+  return sent;
+}
+
+const editButton = (page: Page) => page.getByRole("button", { name: "Edit Details" });
+const doneButton = (page: Page) => page.getByRole("button", { name: "Done editing" });
+
+test("Edit Details is on Opening, Expenses and Cash Count only, and only with edit_details", async ({
+  page,
+}) => {
+  await stub(page);
+  await enter(page, view("sale"));
+  await expect(page.getByRole("heading", { name: "Sales Entry" })).toBeVisible();
+  await expect(editButton(page)).toHaveCount(0);
+  await page.goto(view("deposit"));
+  await expect(page.getByRole("heading", { name: "Deposit to Bank" })).toBeVisible();
+  await expect(editButton(page)).toHaveCount(0);
+  for (const segment of ["opening", "expense", "cash-count"]) {
+    await page.goto(view(segment));
+    await expect(editButton(page)).toBeVisible();
+  }
+});
+
+test("Edit Details without edit_details: no button, everything stays locked, ?edit=details is ignored", async ({
+  page,
+}) => {
+  const base = reportAnswer();
+  await stub(
+    page,
+    reportAnswer({
+      permissions: { ...(base.permissions as Json), edit_details: false },
+      options: null,
+    }),
+  );
+  await enter(page, `${view("opening")}?edit=details`);
+  await expect(page.getByRole("heading", { name: "Opening", exact: true })).toBeVisible();
+  await expect(editButton(page)).toHaveCount(0);
+  await expect(doneButton(page)).toHaveCount(0);
+  await expect(page.getByRole("radio", { name: "Personal" })).toBeDisabled();
+});
+
+test("Opening: Edit Details changes where the addition came from; Done editing locks it again", async ({
+  page,
+}) => {
+  await stub(page);
+  const sent = await stubEdits(page);
+  await enter(page, view("opening"));
+  await editButton(page).click();
+  await expect(doneButton(page)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Close" })).toHaveCount(0);
+  await page.getByRole("radio", { name: "Personal" }).check();
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.locator("[data-toast-type]").filter({ hasText: "Your withdrawal source is saved." }),
+  ).toBeVisible();
+  expect(sent).toHaveLength(1);
+  expect(sent[0].path).toMatch(/\/reports\/[^/]+\/withdrawal$/);
+  expect(JSON.parse(sent[0].body ?? "{}")).toEqual({ withdrawal_type: "personal" });
+  await expectNoHorizontalScroll(page);
+
+  await doneButton(page).click();
+  await expect(page.getByRole("radio", { name: "Personal" })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "Personal" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Close" })).toBeVisible();
+});
+
+test("Expenses: in Edit Details a line opens its editor; Save sends only the change", async ({
+  page,
+}) => {
+  await stub(page);
+  const sent = await stubEdits(page);
+  await enter(page, view("expense"));
+  await editButton(page).click();
+  await page.getByText("Food & Drink").click();
+  const dialog = page.getByRole("dialog", { name: "Expense Details" });
+  const description = dialog.getByRole("textbox", { name: /Description/ });
+  await expect(description).toHaveValue("Team lunch");
+  await description.fill("Team lunch for six");
+  await dialog.getByRole("button", { name: "Save changes" }).click();
+  await expect.poll(() => sent.length).toBe(1);
+  expect(sent[0].method).toBe("PATCH");
+  expect(sent[0].path).toMatch(/\/reports\/[^/]+\/expense-lines\/e1$/);
+  expect(sent[0].body).toContain("Team lunch for six");
+  expect(sent[0].body).not.toContain('name="supplier_id"');
+  await expectNoHorizontalScroll(page);
+});
+
+test("Cash Count: in Edit Details the reason saves in place; a refusal shows the API's sentence", async ({
+  page,
+}) => {
+  await stub(page);
+  const sent = await stubEdits(page);
+  await enter(page, view("cash-count"));
+  await editButton(page).click();
+  const reason = page.getByRole("textbox", { name: /^Reason/ });
+  await expect(reason).toHaveValue("Paid a courier");
+  await reason.fill("Courier and parking");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    page.locator("[data-toast-type]").filter({ hasText: "Your discrepancy reason is saved." }),
+  ).toBeVisible();
+  expect(JSON.parse(sent[0].body ?? "{}")).toEqual({ reason: "Courier and parking" });
+  await expect(reason).toHaveValue("Courier and parking");
+
+  const refusal = "This is the latest report. Use Edit Report to change it.";
+  await page.route(`${API}/reports/${REPORT}/difference-reason`, (route) =>
+    route.fulfill({ status: 409, json: { error: refusal } }),
+  );
+  await reason.fill("Another try");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await expect(page.getByText(refusal)).toBeVisible();
+  await expectNoHorizontalScroll(page);
+});
+
+test("a step page with an unsaved change asks before the header's Back leaves it", async ({
+  page,
+}) => {
+  await stub(page);
+  await stubEdits(page);
+  await enter(page, view("opening"));
+  await editButton(page).click();
+  await page.getByRole("radio", { name: "Personal" }).check();
+  await page.getByRole("link", { name: "Back" }).click();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await leave.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page).toHaveURL(SUMMARY);
+});
+
+test("the mode goes with the stepper: a step opens in Edit Details, then the address drops it", async ({
+  page,
+}) => {
+  await stub(page);
+  await enter(page, view("opening"));
+  await expect(steps(page).getByRole("link", { name: "Expenses, done" })).toHaveAttribute(
+    "href",
+    view("expense"),
+  );
+  await editButton(page).click();
+  await expect(steps(page).getByRole("link", { name: "Expenses, done" })).toHaveAttribute(
+    "href",
+    `${view("expense")}?edit=details`,
+  );
+  // Ending is the summary, which opens in Edit Details too
+  await expect(steps(page).getByRole("link", { name: /^Ending/ })).toHaveAttribute(
+    "href",
+    `${SUMMARY}?edit=details`,
+  );
+  await steps(page).getByRole("link", { name: "Expenses, done" }).click();
+  await expect(page.getByRole("heading", { name: "Expenses", exact: true })).toBeVisible();
+  await expect(doneButton(page)).toBeVisible();
+  await expect(page).toHaveURL(view("expense"));
+});
+
+test("the summary's stepper carries the mode only while editing", async ({ page }) => {
+  await stub(page);
+  await enter(page, SUMMARY);
+  const opening = steps(page).getByRole("link", { name: "Opening, done" });
+  await expect(opening).toHaveAttribute("href", view("opening"));
+  await editButton(page).click();
+  await expect(opening).toHaveAttribute("href", `${view("opening")}?edit=details`);
+  await opening.click();
+  await expect(page.getByRole("heading", { name: "Opening", exact: true })).toBeVisible();
+  await expect(doneButton(page)).toBeVisible();
+});
+
+test("a step page in Edit Details on a report that has been to Xero says so", async ({ page }) => {
+  await stub(
+    page,
+    reportAnswer({
+      was_published: true,
+      xero_integrated: true,
+      publishing_status: "completed",
+    }),
+  );
+  await enter(page, view("cash-count"));
+  const title = page.getByText("This report is in Xero.", { exact: true });
+  await expect(title).toHaveCount(0);
+  await editButton(page).click();
+  await expect(title).toBeVisible();
+  await expect(
+    page.getByText("Your changes reach Xero only when you publish the report again."),
+  ).toBeVisible();
+});
+
 test("moving between steps, then Close, closes the report - not the step before, nor Ending", async ({
   page,
 }) => {

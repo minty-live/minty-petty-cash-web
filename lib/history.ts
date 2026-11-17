@@ -30,8 +30,14 @@ export type HistoryRow = {
   created_at: string | null;
   /** Ever sent to Xero (the delete warns). */
   was_published: boolean;
+  /** Its entries are recorded for the company's Xero organisation: a delete takes them out (2026-11-17). */
+  xero_removable: boolean;
   publish_reasons: { text: string; resolved: boolean }[];
-  permissions: { edit: boolean; delete: boolean };
+  /**
+   * `edit`: reopen (the latest report only). `edit_details`: the report view's Edit Details - what
+   * moves no balance, on any submitted report not being published.
+   */
+  permissions: { edit: boolean; delete: boolean; edit_details: boolean };
 };
 
 /** `GET /reports`: one page, newest day first. */

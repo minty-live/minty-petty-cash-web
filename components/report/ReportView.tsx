@@ -9,7 +9,8 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import {
-  DeleteReportModal,
+  AmberNote,
+  useDeleteReport,
   ShareButton,
   ShareModal,
   useEditReport,
@@ -17,9 +18,11 @@ import {
 } from "@/components/report/ReportActions";
 import { LoadingOverlay, ReportBadge } from "@/components/report/ReportChrome";
 import {
+  EditDetailsButton,
   EditLinesCard,
   LineEditor,
   ReasonEditor,
+  useUnsavedEdits,
   WithdrawalCard,
 } from "@/components/report/ReportEdits";
 import { ReportSummary } from "@/components/report/ReportSummary";
@@ -31,8 +34,9 @@ import { ALL_DONE } from "@/lib/dashboard";
 import { setFlash } from "@/lib/flash";
 import { historyHref } from "@/lib/history";
 import { datePill } from "@/lib/opening";
-import { DELETED, summarySales, type DailyReport } from "@/lib/report";
+import { DELETED, deleteXero, EDIT_PUBLISHED, summarySales, type DailyReport } from "@/lib/report";
 import { useAuth } from "@/lib/useAuth";
+import { useEditDetailsMode } from "@/lib/useEditDetailsMode";
 import { stepHref } from "@/lib/wizardPages";
 
 const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then reload the page.";
@@ -52,7 +56,8 @@ const ICON_GROW = "transition-transform duration-300 group-hover:scale-[1.2]";
  *
  * - Edit Report: `POST /reports/<id>/reopen`, then this app's Opening for the day (Flask's confirm
  *   first for a report that has been to Xero).
- * - Delete: Flask's modal (warning first that the report is in Xero, the owner's rule of 2026-10-15),
+ * - Delete: Flask's modal through `useDeleteReport` (a report in Xero says first whether its entries
+ *   come out of Xero too, and Xero's refusals stay listed in it - owner, 2026-11-17),
  *   `DELETE /reports/<id>`, then the dashboard with "That report's deleted.".
  * - Share: `POST /reports/<id>/share-link` into Flask's Share Report modal.
  * - Close and the header's Back: back to the page the person came from - the report list with its
@@ -63,10 +68,19 @@ const ICON_GROW = "transition-transform duration-300 group-hover:scale-[1.2]";
  *   this page (ReportEdits.tsx) - the difference reason in its box, "Addition to Cash Drawer"'s
  *   Withdrawal from, and each expense line's editor. Each edit answers the Daily Report and the
  *   page is drawn from it again. "Done editing" leaves the mode; Close hides while in it, as Flask's.
+ *   On a report that has been to Xero the mode opens with the amber "This report is in Xero." note.
+ *   `editDetails` (report history's Edit Details, `?edit=details`) opens the page in the mode; the
+ *   address then drops it, so a reload opens the plain view.
  *
  * Every refusal shows the API's sentence and keeps the page.
  */
-export function ReportView({ reportId }: { reportId: string }) {
+export function ReportView({
+  reportId,
+  editDetails = false,
+}: {
+  reportId: string;
+  editDetails?: boolean;
+}) {
   const toast = useToast();
   const auth = useAuth();
   const router = useRouter();
@@ -119,6 +133,7 @@ export function ReportView({ reportId }: { reportId: string }) {
       entityId={auth.entityId}
       entityName={auth.entityName}
       acronym={acronym}
+      editDetails={editDetails}
     />
   );
 }
@@ -129,6 +144,7 @@ function ReportViewBody({
   entityId,
   entityName,
   acronym,
+  editDetails,
 }: {
   report: DailyReport;
   /** An edit's answer: the whole Daily Report, drawn again. */
@@ -136,70 +152,57 @@ function ReportViewBody({
   entityId: string;
   entityName: string;
   acronym: string;
+  /** Open in Edit Details (report history's menu). */
+  editDetails: boolean;
 }) {
-  const toast = useToast();
   const router = useRouter();
   const home = pettyCashHome(entityId, entityName);
-  const path = `/reports/${encodeURIComponent(report.report_id)}`;
   const share = useShareLink(report.report_id);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   // a ref, not state: a second click in the same frame must see the first one
   const acting = useRef(false);
   const { edit, ui: editAsk } = useEditReport(entityId, entityName, acting);
-  const [editingDetails, setEditingDetails] = useState(false);
-  const [lineId, setLineId] = useState<string | null>(null);
-  const closeLine = useCallback(() => setLineId(null), []);
-
-  function refused(err: unknown) {
-    acting.current = false;
-    if (err instanceof ApiError && err.status === 401) return;
-    setBusy(null);
-    toast(err instanceof ApiError ? err.message : UNREACHABLE, "error");
-  }
-
-  async function remove() {
-    if (acting.current) return;
-    acting.current = true;
-    setConfirmDelete(false);
-    setBusy("Deleting report...");
-    try {
-      await pettyCashFetch(path, { method: "DELETE" });
+  const deletion = useDeleteReport({
+    entityId,
+    entityName,
+    actingRef: acting,
+    setBusy,
+    onDeleted: () => {
       setBusy("Success, Redirecting to Dashboard...");
       setFlash(DELETED, "success");
       router.push(home);
-    } catch (err) {
-      refused(err);
-    }
-  }
+    },
+  });
+  // asked for once (`?edit=details`): the address drops it, so a reload is the plain view
+  const [editingDetails, setEditingDetails] = useEditDetailsMode(editDetails);
+  const [lineId, setLineId] = useState<string | null>(null);
+  const closeLine = useCallback(() => setLineId(null), []);
 
   const may = report.permissions;
   // the edits show only while the API allows them: an answer without edit_details ends the mode
   const details = may.edit_details && editingDetails;
   const editedLine =
     details && lineId ? report.expenses.lines.find((l) => l.id === lineId) : undefined;
+  // "Leave without saving?" while an editor holds changes; Discard puts the saved values back
+  const unsaved = useUnsavedEdits(closeLine);
 
   const overlays = (
     <>
       {editedLine ? (
         <LineEditor
-          key={editedLine.id}
+          key={`${editedLine.id}-${unsaved.round}`}
           report={report}
           line={editedLine}
           onSaved={onSaved}
           onClose={closeLine}
+          onDirty={unsaved.track("line")}
         />
       ) : null}
       {busy ? <LoadingOverlay text={busy} /> : null}
       {share.link ? <ShareModal url={share.link.url} onClose={share.close} /> : null}
       {editAsk}
-      {confirmDelete ? (
-        <DeleteReportModal
-          wasPublished={report.was_published}
-          onCancel={() => setConfirmDelete(false)}
-          onDelete={() => void remove()}
-        />
-      ) : null}
+      {deletion.ui}
+      {unsaved.ui}
     </>
   );
 
@@ -226,11 +229,17 @@ function ReportViewBody({
         <Stepper
           draft={ALL_DONE}
           page="ending"
-          stepHref={(step) => reportStepHref(entityId, entityName, report.report_id, step)}
+          stepHref={(step) =>
+            reportStepHref(entityId, entityName, report.report_id, step, { editDetails: details })
+          }
         />
       }
       overlays={overlays}
     >
+      {/* editing a report that has been to Xero: the changes reach it only on a republish (owner, 2026-11-17) */}
+      {details && report.was_published ? (
+        <AmberNote className="mb-6" title={EDIT_PUBLISHED.title} body={EDIT_PUBLISHED.body} />
+      ) : null}
       <ReportSummary
         code={report.currency_code}
         sales={summarySales(report.sales)}
@@ -240,16 +249,22 @@ function ReportViewBody({
         cash={report.cash}
         reasonEditor={
           details && report.cash.difference.kind !== "none" ? (
-            <ReasonEditor key={report.cash.difference.reason} report={report} onSaved={onSaved} />
+            <ReasonEditor
+              key={`${report.cash.difference.reason}-${unsaved.round}`}
+              report={report}
+              onSaved={onSaved}
+              onDirty={unsaved.track("reason")}
+            />
           ) : undefined
         }
       />
 
       {details && report.cash.cash_addition > 0 ? (
         <WithdrawalCard
-          key={report.cash.cash_addition_type ?? ""}
+          key={`${report.cash.cash_addition_type ?? ""}-${unsaved.round}`}
           report={report}
           onSaved={onSaved}
+          onDirty={unsaved.track("withdrawal")}
         />
       ) : null}
       {details && report.expenses.lines.length > 0 ? (
@@ -265,7 +280,12 @@ function ReportViewBody({
       {may.delete ? (
         <button
           type="button"
-          onClick={() => setConfirmDelete(true)}
+          onClick={() =>
+            deletion.ask({
+              id: report.report_id,
+              xero: deleteXero(report.was_published, report.xero_removable),
+            })
+          }
           disabled={busy !== null}
           className={`${ACTION} bg-flask-red hover:bg-flask-red/80`}
         >
@@ -314,45 +334,19 @@ function ReportViewBody({
       ) : null}
 
       {may.edit_details ? (
-        <button
-          type="button"
-          onClick={() => {
-            setLineId(null);
-            setEditingDetails((on) => !on);
-          }}
-          className={`${ACTION} bg-flask-olive hover:bg-flask-olive/80`}
-        >
-          {editingDetails ? (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-              className={`size-6 ${ICON_GROW}`}
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
-            </svg>
-          ) : (
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth="1.5"
-              stroke="currentColor"
-              className={`size-6 ${ICON_GROW}`}
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
-              />
-            </svg>
-          )}
-          <span>{editingDetails ? "Done editing" : "Edit Details"}</span>
-        </button>
+        <EditDetailsButton
+          editing={editingDetails}
+          onToggle={() =>
+            // leaving the mode with something unsaved asks first
+            editingDetails
+              ? unsaved.leave(() => {
+                  setLineId(null);
+                  setEditingDetails(false);
+                })
+              : setEditingDetails(true)
+          }
+          spacing="mt-6"
+        />
       ) : null}
 
       {!details ? (

@@ -1,9 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+
+import { guardLeave, useLeaveGuard } from "@minty/shared/leaveGuard";
 
 import { useToast } from "@/components/flask/Toasts";
 import { ExpenseDetailsModal, ExpenseRow } from "@/components/report/ExpensesStep";
+import { LeaveDialog } from "@/components/ui/LeaveDialog";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { uploadName, type Account, type Supplier } from "@/lib/expenses";
@@ -49,6 +52,65 @@ const EDIT_FIELD =
 const EDIT_LABEL = "mb-1 block text-sm font-medium text-flask-gray-700";
 
 type Saved = (report: DailyReport) => void;
+/** An editor saying whether it holds changes not saved yet (`useUnsavedEdits`). */
+type Dirty = (dirty: boolean) => void;
+
+/** Tell the page whether this editor holds unsaved changes; an editor that goes away holds none. */
+function useReportDirty(dirty: boolean, onDirty: Dirty | undefined) {
+  const onDirtyRef = useRef(onDirty);
+  useEffect(() => {
+    onDirtyRef.current = onDirty;
+  });
+  useEffect(() => {
+    onDirtyRef.current?.(dirty);
+  }, [dirty]);
+  useEffect(() => () => onDirtyRef.current?.(false), []);
+}
+
+/**
+ * Unsaved changes in Edit Details, on the summary and the step pages (owner, 2026-11-17): while an
+ * editor holds changes, a link that leaves (the stepper, the header's Back, the sidebar) and the
+ * browser's Back ask "Leave without saving?" in the page (`@minty/shared/leaveGuard`, the
+ * `LeaveDialog`); `leave(proceed)` asks the same for an exit that is a button (Done editing).
+ * "Discard changes" remounts the editors with the saved values (`round` goes in their keys) and
+ * runs `onDiscard` (closing a line editor), then goes on. A reload or a closed tab leaves without
+ * asking - the only prompt a browser allows there is its own, and Minty shows none.
+ */
+export function useUnsavedEdits(onDiscard: () => void): {
+  track: (key: string) => Dirty;
+  round: number;
+  leave: (proceed: () => void) => void;
+  ui: ReactNode;
+} {
+  const [dirty, setDirty] = useState<Record<string, boolean>>({});
+  const [round, setRound] = useState(0);
+  const onDiscardRef = useRef(onDiscard);
+  useEffect(() => {
+    onDiscardRef.current = onDiscard;
+  });
+  const reset = useCallback(() => {
+    setDirty({});
+    setRound((r) => r + 1);
+    onDiscardRef.current();
+  }, []);
+  const guard = useLeaveGuard(Object.values(dirty).some(Boolean), reset);
+  const trackers = useRef(new Map<string, Dirty>());
+  const track = useCallback((key: string) => {
+    let tracker = trackers.current.get(key);
+    if (!tracker) {
+      tracker = (isDirty: boolean) =>
+        setDirty((all) => (Boolean(all[key]) === isDirty ? all : { ...all, [key]: isDirty }));
+      trackers.current.set(key, tracker);
+    }
+    return tracker;
+  }, []);
+  return {
+    track,
+    round,
+    leave: guardLeave,
+    ui: guard.open ? <LeaveDialog onDiscard={guard.discard} onStay={guard.stay} /> : null,
+  };
+}
 
 /** The sentence a refusal carried (the API's own), or the connection's. */
 function refusalOf(err: unknown): string {
@@ -62,7 +124,15 @@ const reportPath = (report: DailyReport) => `/reports/${encodeURIComponent(repor
  * "Save changes". Checked as it is typed - at most 300 characters, never emptied while the cash
  * was short or over.
  */
-export function ReasonEditor({ report, onSaved }: { report: DailyReport; onSaved: Saved }) {
+export function ReasonEditor({
+  report,
+  onSaved,
+  onDirty,
+}: {
+  report: DailyReport;
+  onSaved: Saved;
+  onDirty?: Dirty;
+}) {
   const toast = useToast();
   const field = useRef<HTMLTextAreaElement>(null);
   const { kind } = report.cash.difference;
@@ -70,6 +140,7 @@ export function ReasonEditor({ report, onSaved }: { report: DailyReport; onSaved
   const [refused, setRefused] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const problem = editReasonProblem(reason, kind);
+  useReportDirty(reason !== report.cash.difference.reason, onDirty);
   const message = refused ?? problem;
 
   async function save(event: FormEvent) {
@@ -127,14 +198,78 @@ export function ReasonEditor({ report, onSaved }: { report: DailyReport; onSaved
   );
 }
 
+/** The olive Edit Details / Done editing button, on the summary and the step pages alike. */
+export function EditDetailsButton({
+  editing,
+  onToggle,
+  spacing,
+}: {
+  editing: boolean;
+  onToggle: () => void;
+  /** Where it sits: the summary's `mt-6` among its actions, a step page's `mb-4` above Close. */
+  spacing: string;
+}) {
+  const icon = "size-6 transition-transform duration-300 group-hover:scale-[1.2]";
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`group ${spacing} flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-olive px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-olive/80`}
+    >
+      {editing ? (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth="1.5"
+          stroke="currentColor"
+          className={icon}
+          aria-hidden="true"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+        </svg>
+      ) : (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          strokeWidth="1.5"
+          stroke="currentColor"
+          className={icon}
+          aria-hidden="true"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125"
+          />
+        </svg>
+      )}
+      <span>{editing ? "Done editing" : "Edit Details"}</span>
+    </button>
+  );
+}
+
 /**
  * "Addition to Cash Drawer": the amount (never editable), then Flask's "Withdrawal from:" -
  * Company Bank or Personal (Personal when none was saved, as Flask checked it) - and "Save changes".
+ * `inline` (the Opening step page, where the amount is already drawn): the choice and its Save only.
  */
-export function WithdrawalCard({ report, onSaved }: { report: DailyReport; onSaved: Saved }) {
+export function WithdrawalCard({
+  report,
+  onSaved,
+  inline = false,
+  onDirty,
+}: {
+  report: DailyReport;
+  onSaved: Saved;
+  inline?: boolean;
+  onDirty?: Dirty;
+}) {
   const toast = useToast();
   const saved = report.cash.cash_addition_type === "company" ? "company" : "personal";
   const [choice, setChoice] = useState<"company" | "personal">(saved);
+  useReportDirty(choice !== saved, onDirty);
   const [refused, setRefused] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -158,11 +293,15 @@ export function WithdrawalCard({ report, onSaved }: { report: DailyReport; onSav
   }
 
   return (
-    <form onSubmit={(e) => void save(e)} className={CARD} noValidate>
-      <h3 className={`mb-4 ${CARD_TITLE}`}>Addition to Cash Drawer</h3>
-      <div className="mb-4 w-full rounded-flask-xl border border-flask-gray-300 bg-flask-gray-200 px-3 py-3 text-flask-gray-500 [overflow-wrap:anywhere]">
-        {formatMoney(report.cash.cash_addition, report.currency_code)}
-      </div>
+    <form onSubmit={(e) => void save(e)} className={inline ? "mb-4" : CARD} noValidate>
+      {inline ? null : (
+        <>
+          <h3 className={`mb-4 ${CARD_TITLE}`}>Addition to Cash Drawer</h3>
+          <div className="mb-4 w-full rounded-flask-xl border border-flask-gray-300 bg-flask-gray-200 px-3 py-3 text-flask-gray-500 [overflow-wrap:anywhere]">
+            {formatMoney(report.cash.cash_addition, report.currency_code)}
+          </div>
+        </>
+      )}
       <fieldset aria-describedby={refused ? "withdrawal_message" : undefined}>
         <legend className="mb-2 block text-sm font-medium text-flask-gray-700">
           Withdrawal from:
@@ -248,18 +387,21 @@ function withCurrent<T extends { id: string }>(list: T[], current: T | null): T[
  * (never editable), then Description, Supplier and Account Code (Flask's selects, from the read's
  * `options`), Receipt/Document ("Click to change files", one PDF, JPEG or PNG of 10 MB at most,
  * checked before it is sent) and "Save changes". Only what changed is sent. Escape or a click
- * outside keeps an editor with changes open (Flask's toast); Close discards them.
+ * outside keeps an editor with changes open (Flask's toast); Close with changes asks "Leave without
+ * saving?" (owner, 2026-11-17; Flask's discarded them).
  */
 export function LineEditor({
   report,
   line,
   onSaved,
   onClose,
+  onDirty,
 }: {
   report: DailyReport;
   line: ReportLine;
   onSaved: Saved;
   onClose: () => void;
+  onDirty?: Dirty;
 }) {
   const toast = useToast();
   const options = report.options ?? { suppliers: [], accounts: [] };
@@ -278,6 +420,7 @@ export function LineEditor({
 
   const changes = lineChanges(line, { description, supplierId, accountId, receipt });
   const dirty = Object.keys(changes).length > 0;
+  useReportDirty(dirty, onDirty);
   // read when Escape or a click outside asks: the modal's handler must keep one identity, or it
   // takes the focus back from the field being typed in
   const dirtyRef = useRef(dirty);
@@ -481,7 +624,8 @@ export function LineEditor({
     <ExpenseDetailsModal
       line={line}
       code={report.currency_code}
-      onClose={onClose}
+      // Close with changes asks "Leave without saving?" (owner, 2026-11-17; Flask discarded them)
+      onClose={() => guardLeave(onClose)}
       onDismiss={dismiss}
       editor={editor}
     />

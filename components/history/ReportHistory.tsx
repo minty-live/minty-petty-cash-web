@@ -6,12 +6,12 @@ import { useCallback, useEffect, useId, useRef, useState, type MouseEvent } from
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { useToast } from "@/components/flask/Toasts";
 import { RangeCalendar } from "@/components/history/RangeCalendar";
-import { DeleteReportModal, useEditReport } from "@/components/report/ReportActions";
+import { useDeleteReport, useEditReport } from "@/components/report/ReportActions";
 import { usePublish, type PublishAsk } from "@/components/report/Publish";
 import { LoadingOverlay } from "@/components/report/ReportChrome";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashDownload, pettyCashFetch } from "@/lib/apiClient";
-import { pettyCashHome, reportHref } from "@/lib/companyPages";
+import { pettyCashHome, reportEditDetailsHref, reportHref } from "@/lib/companyPages";
 import {
   CSV_CHOICES,
   CSV_EXPORTED,
@@ -36,6 +36,7 @@ import {
   type HistoryPage,
   type HistoryRow,
 } from "@/lib/history";
+import { deleteXero } from "@/lib/report";
 import { useAuth } from "@/lib/useAuth";
 import { stepHref } from "@/lib/wizardPages";
 
@@ -100,8 +101,10 @@ const MENU_ITEM =
  *   refusal's sentence as a toast. With no dates picked either file is the whole history (`csvRequest`).
  * - "Report Results": a row per day, newest first - the date and its weekday circle, Sales and
  *   Expenses, the badge (a failed publish's reasons on hover or a tap), when and by whom, the ⋮
- *   menu (Edit, Delete, View, Publish / Republish) and the chevron (View). Then the pager.
- * - Edit: `POST /reports/<id>/reopen` as on a report's view. Delete: the view's modal, then the
+ *   menu (View, Publish / Republish, Edit, Delete - the owner's order, 2026-11-17) and the chevron
+ *   (View). Then the pager.
+ * - Edit: the latest report, `POST /reports/<id>/reopen` as on a report's view; an older one opens
+ *   its view in Edit Details (`?edit=details`). Delete: the view's modal, then the
  *   list again in place with Flask's "That report is deleted.". Publish / Republish: Flask's own
  *   (Publish.tsx) - the republish confirm, the overlay while it polls, the outcome as Flask's toast,
  *   then the list again in place.
@@ -196,7 +199,6 @@ function HistoryBody({
   const [exporting, setExporting] = useState(false);
   const [csvMenu, setCsvMenu] = useState(false);
   const [menu, setMenu] = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<HistoryRow | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   // a ref, not state: a second click in the same frame must see the first one
   const acting = useRef(false);
@@ -290,23 +292,22 @@ function HistoryBody({
     }
   }
 
-  async function remove(row: HistoryRow) {
-    if (acting.current) return;
-    acting.current = true;
-    setConfirmDelete(null);
-    setBusy("Deleting report...");
-    try {
-      await pettyCashFetch(`/reports/${encodeURIComponent(row.id)}`, { method: "DELETE" });
-      await reload();
-      toast(HISTORY_DELETED, "success");
-    } catch (err) {
-      if (!(err instanceof ApiError && err.status === 401))
-        toast(err instanceof ApiError ? err.message : UNREACHABLE, "error");
-    } finally {
-      acting.current = false;
-      setBusy(null);
-    }
-  }
+  // Delete: the shared modal and call; afterwards the list is read again in place (Flask reloaded)
+  const deletion = useDeleteReport({
+    entityId,
+    entityName,
+    actingRef: acting,
+    setBusy,
+    onDeleted: async () => {
+      try {
+        await reload();
+        toast(HISTORY_DELETED, "success");
+      } finally {
+        acting.current = false;
+        setBusy(null);
+      }
+    },
+  });
 
   // Flask's sticky filter (z-40 there); under this app's overlays here, which sit at z-30
   const toolbar = (
@@ -448,13 +449,7 @@ function HistoryBody({
   const overlays = (
     <>
       {busy ? <LoadingOverlay text={busy} /> : null}
-      {confirmDelete ? (
-        <DeleteReportModal
-          wasPublished={confirmDelete.was_published}
-          onCancel={() => setConfirmDelete(null)}
-          onDelete={() => void remove(confirmDelete)}
-        />
-      ) : null}
+      {deletion.ui}
       {publish.ui}
       {editAsk}
     </>
@@ -511,7 +506,7 @@ function HistoryBody({
             }}
             onDelete={() => {
               setMenu(null);
-              setConfirmDelete(row);
+              deletion.ask({ id: row.id, xero: deleteXero(row.was_published, row.xero_removable) });
             }}
             onPublish={(ask) => {
               setMenu(null);
@@ -598,17 +593,20 @@ function HistoryEntry({
     ? stepHref(entityId, entityName, draftStep(row), row.transaction_date)
     : reportHref(entityId, entityName, row.id, "summary");
   const open = (e: MouseEvent<HTMLAnchorElement>) => inApp(e, view);
+  // the report's view, opened in Edit Details: what moves no balance, on any submitted report
+  const details = reportEditDetailsHref(entityId, entityName, row.id);
+  const openDetails = (e: MouseEvent<HTMLAnchorElement>) => inApp(e, details);
   const sales = historyAmount(row.total_sales, currencyCode);
   const expenses = historyAmount(row.total_expenses, currencyCode);
   const republish = badge === "Published" || badge === "Publish failed";
-  // Flask's rule: Republish always confirms, warning of duplicates only for a report fully in Xero
+  // Flask's rule: Republish always confirms, saying it is in Xero only for a report fully in Xero
   // (a partly published one is re-sent selectively); Publish confirms only for one edited after a publish
   const ask: PublishAsk = {
     reportId: row.id,
     confirm: republish
-      ? { duplicate: badge === "Published" }
+      ? { inXero: badge === "Published" }
       : row.was_published
-        ? { duplicate: true }
+        ? { inXero: true }
         : null,
   };
 
@@ -768,28 +766,7 @@ function HistoryEntry({
                     className="absolute right-0 top-full z-40 mt-2 min-w-[152px] rounded-flask-xl border border-flask-gray-200 bg-flask-white py-2 shadow-flask-xl"
                   >
                     <div className="flex flex-col">
-                      {row.permissions.edit ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          title="Edit Report"
-                          onClick={onEdit}
-                          className={MENU_ITEM}
-                        >
-                          <span className="text-sm font-medium">Edit</span>
-                        </button>
-                      ) : null}
-                      {row.permissions.delete ? (
-                        <button
-                          type="button"
-                          role="menuitem"
-                          title="Delete Report"
-                          onClick={onDelete}
-                          className={MENU_ITEM}
-                        >
-                          <span className="text-sm font-medium">Delete</span>
-                        </button>
-                      ) : null}
+                      {/* the owner's order (2026-11-17): View, Publish, Edit, Delete */}
                       <a
                         href={view}
                         role="menuitem"
@@ -822,6 +799,39 @@ function HistoryEntry({
                             </span>
                           </button>
                         )
+                      ) : null}
+                      {/* Edit: the latest report reopens; an older one opens its view in Edit Details */}
+                      {row.permissions.edit ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          title="Edit Report"
+                          onClick={onEdit}
+                          className={MENU_ITEM}
+                        >
+                          <span className="text-sm font-medium">Edit</span>
+                        </button>
+                      ) : row.permissions.edit_details ? (
+                        <a
+                          href={details}
+                          role="menuitem"
+                          title="Edit Details"
+                          onClick={openDetails}
+                          className={MENU_ITEM}
+                        >
+                          <span className="text-sm font-medium">Edit</span>
+                        </a>
+                      ) : null}
+                      {row.permissions.delete ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          title="Delete Report"
+                          onClick={onDelete}
+                          className={MENU_ITEM}
+                        >
+                          <span className="text-sm font-medium">Delete</span>
+                        </button>
                       ) : null}
                     </div>
                   </div>

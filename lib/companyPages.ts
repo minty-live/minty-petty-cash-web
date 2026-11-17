@@ -70,17 +70,32 @@ export function reportHref(
   return `${pettyCashHome(entityId, entityName)}/reports/${encodeURIComponent(reportId)}/${page}`;
 }
 
+/**
+ * A submitted report's view opened in Edit Details (report history's menu, owner 2026-11-17): the
+ * summary with `?edit=details`, which the view reads once and then drops from the address.
+ */
+export function reportEditDetailsHref(
+  entityId: string,
+  entityName: string,
+  reportId: string,
+): string {
+  return `${reportHref(entityId, entityName, reportId, "summary")}?edit=details`;
+}
+
 /** Where a submitted report's stepper leads: each step's read-only view, Ending to the summary. */
 export function reportStepHref(
   entityId: string,
   entityName: string,
   reportId: string,
   step: WizardStep,
+  { editDetails = false }: { editDetails?: boolean } = {},
 ): string {
-  return reportHref(
+  const href = reportHref(
     entityId,
     entityName,
     reportId,
     step === "ending" ? "summary" : WIZARD_STEP_PATH[step],
   );
+  // while Edit Details is open, the next page opens in it too (owner, 2026-11-17)
+  return editDetails ? `${href}?edit=details` : href;
 }

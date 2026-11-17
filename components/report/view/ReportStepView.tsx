@@ -11,7 +11,15 @@ import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { DiscrepancyAlert } from "@/components/report/CashCountStep";
 import { ExpenseDetailsModal, ExpenseRow } from "@/components/report/ExpensesStep";
+import { AmberNote } from "@/components/report/ReportActions";
 import { ReportBadge, StepImage } from "@/components/report/ReportChrome";
+import {
+  EditDetailsButton,
+  LineEditor,
+  ReasonEditor,
+  useUnsavedEdits,
+  WithdrawalCard,
+} from "@/components/report/ReportEdits";
 import { CardIcon, CashIcon, Section, Total, TruckIcon } from "@/components/report/SalesStep";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
@@ -29,9 +37,16 @@ import { ALL_DONE } from "@/lib/dashboard";
 import { formatMoney } from "@/lib/money";
 import { historyHref } from "@/lib/history";
 import { datePill } from "@/lib/opening";
-import { stepViewFigures, summarySales, type DailyReport, type ReportLine } from "@/lib/report";
+import {
+  EDIT_PUBLISHED,
+  stepViewFigures,
+  summarySales,
+  type DailyReport,
+  type ReportLine,
+} from "@/lib/report";
 import { flaskLabel, sections } from "@/lib/sales";
 import { useAuth } from "@/lib/useAuth";
+import { useEditDetailsMode } from "@/lib/useEditDetailsMode";
 import { stepHref } from "@/lib/wizardPages";
 
 const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then reload the page.";
@@ -48,6 +63,13 @@ const LOCKED =
  * `GET /reports/<id>` - the summary's own read - so nothing here can change the report; its
  * `cash.opening_safe_box` and `cash.denominations` exist for these views.
  *
+ * Edit Details here too (owner, 2026-11-17), beside the summary's and with the same editors
+ * (ReportEdits.tsx) and rules (`permissions.edit_details`): Opening changes where the addition came
+ * from, Expenses opens a line's editor, Cash Count edits the difference reason. Sales and Bank Deposit
+ * stay read-only (all they hold moves the balance) but show Done editing while the mode is on. While
+ * editing, the stepper's links carry `?edit=details`, so the next step (or the summary) opens in the
+ * mode; each save answers the Daily Report and the page is drawn from it.
+ *
  * A draft has no submitted view: it opens that step of the wizard. The header's Back steps over
  * the other read-only steps to the summary the stepper came from; with nothing before it in this
  * app, the summary. Close closes the report (the owner, 2026-11-13: never Ending): past its steps,
@@ -60,7 +82,15 @@ const CLOSE_REPORT_SKIP = [
   ...REPORT_STEP_VIEW_SKIP,
   /\/petty-cash\/reports\/[^/]+\/(summary|submitted)$/,
 ];
-export function ReportStepView({ reportId, step }: { reportId: string; step: StepSegment }) {
+export function ReportStepView({
+  reportId,
+  step,
+  editDetails = false,
+}: {
+  reportId: string;
+  step: StepSegment;
+  editDetails?: boolean;
+}) {
   const toast = useToast();
   const auth = useAuth();
   const router = useRouter();
@@ -113,43 +143,78 @@ export function ReportStepView({ reportId, step }: { reportId: string; step: Ste
   return (
     <StepViewBody
       report={report}
+      onSaved={setReport}
       step={step}
       entityId={auth.entityId}
       entityName={auth.entityName}
       acronym={acronym}
+      editDetails={editDetails}
     />
   );
 }
 
+/** The steps that hold a detail moving no balance: where Edit Details can be opened. */
+const EDITABLE_STEPS: readonly StepSegment[] = ["opening", "expense", "cash-count"];
+
 function StepViewBody({
   report,
+  onSaved,
   step,
   entityId,
   entityName,
   acronym,
+  editDetails,
 }: {
   report: DailyReport;
+  /** An edit's answer: the whole Daily Report, drawn again. */
+  onSaved: (report: DailyReport) => void;
   step: StepSegment;
   entityId: string;
   entityName: string;
   acronym: string;
+  editDetails: boolean;
 }) {
   const summary = reportHref(entityId, entityName, report.report_id, "summary");
   const [viewing, setViewing] = useState<ReportLine | null>(null);
   const [calculator, setCalculator] = useState(false);
+  const [editingDetails, setEditingDetails] = useEditDetailsMode(editDetails);
+  const [lineId, setLineId] = useState<string | null>(null);
   const code = report.currency_code;
+  const may = report.permissions;
+  // the edits show only while the API allows them: an answer without edit_details ends the mode
+  const details = may.edit_details && editingDetails;
+  const editedLine =
+    details && lineId ? report.expenses.lines.find((l) => l.id === lineId) : undefined;
+  // "Leave without saving?" while an editor holds changes; Discard puts the saved values back
+  const unsaved = useUnsavedEdits(() => setLineId(null));
 
   const body =
     step === "opening" ? (
-      <OpeningView report={report} />
+      <OpeningView
+        report={report}
+        editing={details}
+        onSaved={onSaved}
+        round={unsaved.round}
+        onDirty={unsaved.track("withdrawal")}
+      />
     ) : step === "sale" ? (
       <SalesView report={report} />
     ) : step === "expense" ? (
-      <ExpensesView report={report} onOpen={setViewing} />
+      <ExpensesView
+        report={report}
+        onOpen={(line) => (details ? setLineId(line.id) : setViewing(line))}
+      />
     ) : step === "deposit" ? (
       <DepositView report={report} />
     ) : (
-      <CashCountView report={report} onCalculator={() => setCalculator(true)} />
+      <CashCountView
+        report={report}
+        onCalculator={() => setCalculator(true)}
+        editing={details}
+        onSaved={onSaved}
+        round={unsaved.round}
+        onDirty={unsaved.track("reason")}
+      />
     );
 
   return (
@@ -174,41 +239,75 @@ function StepViewBody({
         <Stepper
           draft={ALL_DONE}
           page={REPORT_STEP_VIEWS[step]}
-          stepHref={(s) => reportStepHref(entityId, entityName, report.report_id, s)}
+          stepHref={(s) =>
+            reportStepHref(entityId, entityName, report.report_id, s, { editDetails: details })
+          }
         />
       }
       overlays={
         <>
-          {viewing ? (
+          {viewing && !details ? (
             <ExpenseDetailsModal line={viewing} code={code} onClose={() => setViewing(null)} />
           ) : null}
+          {editedLine ? (
+            <LineEditor
+              key={`${editedLine.id}-${unsaved.round}`}
+              report={report}
+              line={editedLine}
+              onSaved={onSaved}
+              onClose={() => setLineId(null)}
+              onDirty={unsaved.track("line")}
+            />
+          ) : null}
+          {unsaved.ui}
           {calculator ? <CountsModal report={report} onClose={() => setCalculator(false)} /> : null}
         </>
       }
     >
+      {/* editing a report that has been to Xero: the changes reach it only on a republish (owner, 2026-11-17) */}
+      {details && report.was_published ? (
+        <AmberNote className="mb-6" title={EDIT_PUBLISHED.title} body={EDIT_PUBLISHED.body} />
+      ) : null}
       {body}
-      <button
-        type="button"
-        onClick={() => goBack(historyHref(entityId, entityName), { skip: CLOSE_REPORT_SKIP })}
-        className="group flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          fill="none"
-          viewBox="0 0 24 24"
-          strokeWidth="1.5"
-          stroke="currentColor"
-          className="size-6 transition-transform duration-300 group-hover:scale-[1.2]"
-          aria-hidden="true"
+      {may.edit_details && (EDITABLE_STEPS.includes(step) || details) ? (
+        <EditDetailsButton
+          editing={details}
+          onToggle={() =>
+            // leaving the mode with something unsaved asks first
+            editingDetails
+              ? unsaved.leave(() => {
+                  setLineId(null);
+                  setEditingDetails(false);
+                })
+              : setEditingDetails(true)
+          }
+          spacing="mb-4"
+        />
+      ) : null}
+      {details ? null : (
+        <button
+          type="button"
+          onClick={() => goBack(historyHref(entityId, entityName), { skip: CLOSE_REPORT_SKIP })}
+          className="group flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
-          />
-        </svg>
-        <span>Close</span>
-      </button>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth="1.5"
+            stroke="currentColor"
+            className="size-6 transition-transform duration-300 group-hover:scale-[1.2]"
+            aria-hidden="true"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="m9.75 9.75 4.5 4.5m0-4.5-4.5 4.5M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"
+            />
+          </svg>
+          <span>Close</span>
+        </button>
+      )}
     </PhoneCard>
   );
 }
@@ -263,7 +362,21 @@ function LockedMoney({
   );
 }
 
-function OpeningView({ report }: { report: DailyReport }) {
+function OpeningView({
+  report,
+  editing,
+  onSaved,
+  round,
+  onDirty,
+}: {
+  report: DailyReport;
+  /** Edit Details: where the addition came from becomes the summary's editor. */
+  editing: boolean;
+  onSaved: (report: DailyReport) => void;
+  /** `useUnsavedEdits`: Discard's remount, and the editor's unsaved state. */
+  round: number;
+  onDirty: (dirty: boolean) => void;
+}) {
   const { cash, currency_code: code } = report;
   const figures = stepViewFigures(cash);
   const withdrawal = cash.cash_addition_type ?? "personal";
@@ -315,31 +428,41 @@ function OpeningView({ report }: { report: DailyReport }) {
           />
         </div>
 
-        <fieldset className="mb-4" disabled>
-          <legend className="mb-2 block text-sm font-medium text-flask-gray-700">
-            Withdrawal from:
-          </legend>
-          <div className="space-y-2">
-            {(
-              [
-                ["company", "Company Bank"],
-                ["personal", "Personal"],
-              ] as const
-            ).map(([value, label]) => (
-              <label key={value} className="flex cursor-not-allowed items-center">
-                <input
-                  type="radio"
-                  name="withdrawal"
-                  value={value}
-                  checked={withdrawal === value}
-                  readOnly
-                  className="flask-radio"
-                />
-                <span className="ml-2 text-sm text-flask-gray-700">{label}</span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
+        {editing && cash.cash_addition > 0 ? (
+          <WithdrawalCard
+            key={`${cash.cash_addition_type ?? ""}-${round}`}
+            report={report}
+            onSaved={onSaved}
+            inline
+            onDirty={onDirty}
+          />
+        ) : (
+          <fieldset className="mb-4" disabled>
+            <legend className="mb-2 block text-sm font-medium text-flask-gray-700">
+              Withdrawal from:
+            </legend>
+            <div className="space-y-2">
+              {(
+                [
+                  ["company", "Company Bank"],
+                  ["personal", "Personal"],
+                ] as const
+              ).map(([value, label]) => (
+                <label key={value} className="flex cursor-not-allowed items-center">
+                  <input
+                    type="radio"
+                    name="withdrawal"
+                    value={value}
+                    checked={withdrawal === value}
+                    readOnly
+                    className="flask-radio"
+                  />
+                  <span className="ml-2 text-sm text-flask-gray-700">{label}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        )}
 
         <div className="flex items-center justify-between rounded-flask-2xl bg-flask-teal-soft/50 px-3 py-2">
           <span className="text-sm font-medium text-flask-teal-pill">Opening Cash Balance</span>
@@ -477,9 +600,19 @@ function DepositView({ report }: { report: DailyReport }) {
 function CashCountView({
   report,
   onCalculator,
+  editing,
+  onSaved,
+  round,
+  onDirty,
 }: {
   report: DailyReport;
   onCalculator: () => void;
+  /** Edit Details: the difference reason becomes the summary's editor. */
+  editing: boolean;
+  onSaved: (report: DailyReport) => void;
+  /** `useUnsavedEdits`: Discard's remount, and the editor's unsaved state. */
+  round: number;
+  onDirty: (dirty: boolean) => void;
 }) {
   const { cash, currency_code: code } = report;
   const { difference } = cash;
@@ -569,15 +702,24 @@ function CashCountView({
         {out ? (
           <DiscrepancyAlert kind={difference.kind} amount={difference.amount} code={code} />
         ) : null}
-        <textarea
-          id="discrepancyDescription"
-          aria-label="Description"
-          rows={1}
-          readOnly
-          placeholder={out ? "Description" : "No discrepancy — description not required"}
-          value={difference.reason}
-          className="block w-full cursor-not-allowed resize-none rounded-flask-2xl border border-flask-gray-300 bg-flask-gray-200 px-3 py-3 text-flask-gray-500 focus:outline-none"
-        />
+        {editing && out ? (
+          <ReasonEditor
+            key={`${difference.reason}-${round}`}
+            report={report}
+            onSaved={onSaved}
+            onDirty={onDirty}
+          />
+        ) : (
+          <textarea
+            id="discrepancyDescription"
+            aria-label="Description"
+            rows={1}
+            readOnly
+            placeholder={out ? "Description" : "No discrepancy — description not required"}
+            value={difference.reason}
+            className="block w-full cursor-not-allowed resize-none rounded-flask-2xl border border-flask-gray-300 bg-flask-gray-200 px-3 py-3 text-flask-gray-500 focus:outline-none"
+          />
+        )}
       </div>
     </>
   );

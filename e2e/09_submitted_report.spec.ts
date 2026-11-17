@@ -623,7 +623,12 @@ test("View: Edit Report on a report in Xero asks first, in the page; Cancel send
   });
   await page.getByRole("button", { name: "Edit Report" }).click();
   const dialog = page.getByRole("dialog", { name: "Edit Report" });
-  await expect(dialog.getByText("This report was already published to Xero.")).toBeVisible();
+  await expect(dialog.getByText("This report is in Xero.", { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByText("Your changes reach Xero only when you publish the report again."),
+  ).toBeVisible();
+  // a republish updates the report's entries in Xero (owner, 2026-11-17): no duplicates warning
+  await expect(dialog.getByText(/duplicate/)).toHaveCount(0);
   await expectNoHorizontalScroll(page);
   await dialog.getByRole("button", { name: "Cancel" }).click();
   await expect(dialog).toBeHidden();
@@ -668,12 +673,15 @@ test("View: Delete asks in Flask's modal, then deletes and lands on the dashboar
   expect(sent.delete).toBe(1);
 });
 
-test("View: Delete on a report in Xero warns first; Cancel sends nothing", async ({ page }) => {
+test("View: Delete on a report in Xero says its entries come out of Xero too; Cancel sends nothing", async ({
+  page,
+}) => {
   const sent = await openView(page, {
     report: reportAnswer({
       was_published: true,
       xero_integrated: true,
       publishing_status: "completed",
+      xero_removable: true,
     }),
   });
   await page.getByRole("button", { name: "Delete Report" }).click();
@@ -681,7 +689,7 @@ test("View: Delete on a report in Xero warns first; Cancel sends nothing", async
   await expect(dialog.getByText("It is in Xero", { exact: true })).toBeVisible();
   await expect(
     dialog.getByText(
-      "Deleting it here does not remove its entries in Xero, and publishing this day again adds a second copy. To change the report, use Edit report instead.",
+      "Deleting it here also removes its entries from Xero. If Xero refuses any of them, the report is kept and I'll list what to sort out in Xero first.",
     ),
   ).toBeVisible();
   await expectNoHorizontalScroll(page);
@@ -693,6 +701,83 @@ test("View: Delete on a report in Xero warns first; Cancel sends nothing", async
   await dialog.getByRole("button", { name: "Delete", exact: true }).click();
   await expect(toast(page, "That report's deleted.")).toBeVisible();
   expect(sent.delete).toBe(1);
+});
+
+test("View: Delete on a report in Xero with no record of its entries says they stay there", async ({
+  page,
+}) => {
+  await openView(page, {
+    report: reportAnswer({
+      was_published: true,
+      xero_integrated: true,
+      publishing_status: "completed",
+      xero_removable: false,
+    }),
+  });
+  await page.getByRole("button", { name: "Delete Report" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete Report" });
+  await expect(dialog.getByText("It is in Xero", { exact: true })).toBeVisible();
+  await expect(
+    dialog.getByText(
+      "I can't remove this report's entries from Xero, so they stay there. Remove them in Xero by hand after deleting.",
+    ),
+  ).toBeVisible();
+});
+
+test("View: Xero refusing a removal keeps the report; the modal lists what to sort out and offers Try again", async ({
+  page,
+}) => {
+  const kept =
+    "Xero didn't let me remove this report's entries, so I've kept the report. Sort these out in Xero, then delete it again.";
+  const reasons = [
+    "Cash sales invoice: it has a payment in Xero. Remove the payment in Xero first.",
+    "Expense Coffee, HKD 10.00: it's reconciled in Xero. Unreconcile it in Xero first.",
+  ];
+  const sent = await openView(page, {
+    report: reportAnswer({
+      was_published: true,
+      xero_integrated: true,
+      publishing_status: "completed",
+      xero_removable: true,
+    }),
+    onDelete: (route) => route.fulfill({ status: 409, json: { error: kept, reasons } }),
+  });
+  await page.getByRole("button", { name: "Delete Report" }).click();
+  const dialog = page.getByRole("dialog", { name: "Delete Report" });
+  await dialog.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(dialog.getByText(kept)).toBeVisible();
+  await expect(dialog.getByRole("listitem")).toHaveText(reasons);
+  await expectNoHorizontalScroll(page);
+  await expect(toast(page, "That report's deleted.")).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`${SUMMARY}$`));
+
+  await dialog.getByRole("button", { name: "Try again" }).click();
+  await expect.poll(() => sent.delete).toBe(2);
+  await expect(dialog.getByRole("listitem")).toHaveText(reasons);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
+});
+
+test("View: Delete when Xero must be reconnected shows the reconnect dialog", async ({ page }) => {
+  const reconnect = "I've lost access to your Xero account. Mind reconnecting it in Settings?";
+  await openView(page, {
+    report: reportAnswer({
+      was_published: true,
+      xero_integrated: true,
+      publishing_status: "completed",
+      xero_removable: true,
+    }),
+    onDelete: (route) =>
+      route.fulfill({ status: 400, json: { error: reconnect, reconnect: true } }),
+  });
+  await page.getByRole("button", { name: "Delete Report" }).click();
+  await page
+    .getByRole("dialog", { name: "Delete Report" })
+    .getByRole("button", { name: "Delete", exact: true })
+    .click();
+  const dialog = page.getByRole("dialog", { name: "Reconnect Xero" });
+  await expect(dialog.getByText(reconnect)).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "Delete Report" })).toHaveCount(0);
 });
 
 test("View: a refused Delete says the API's sentence and keeps the report", async ({ page }) => {
@@ -817,12 +902,139 @@ const fulfil = (json: Json) => (route: Route) => route.fulfill({ json });
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Expense Details" });
 const linesCard = (page: Page) => card(page, "Expenses");
 
+test("Edit Details on a report that has been to Xero says so while editing; never before, never for one that has not", async ({
+  page,
+}) => {
+  // the owner's sentence (2026-11-17), in the amber note: its title, then its body
+  const title = () => page.getByText("This report is in Xero.", { exact: true });
+  const body = () =>
+    page.getByText("Your changes reach Xero only when you publish the report again.");
+  await openView(page, { report: editable() });
+  await expect(title()).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit Details" }).click();
+  await expect(title()).toBeVisible();
+  await expect(body()).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await page.getByRole("button", { name: "Done editing" }).click();
+  await expect(title()).toHaveCount(0);
+});
+
+test("Edit Details on a report never sent to Xero has no Xero note", async ({ page }) => {
+  await openView(page, {
+    report: editable({
+      xero_integrated: false,
+      publishing_status: "unpublished",
+      was_published: false,
+      status_label: "Submitted",
+    }),
+  });
+  await page.getByRole("button", { name: "Edit Details" }).click();
+  await expect(page.getByRole("button", { name: "Done editing" })).toBeVisible();
+  await expect(page.getByText(/This report is in Xero/)).toHaveCount(0);
+});
+
+test("Edit Details: an unsaved reason holds a stepper link in the page; Go Back stays, Discard goes on", async ({
+  page,
+}) => {
+  const native: string[] = [];
+  page.on("dialog", (d) => {
+    native.push(d.message());
+    void d.dismiss();
+  });
+  const sent = await openDetails(page);
+  await reasonBox(page).fill("Paid a courier and parking");
+  const opening = page
+    .getByRole("list", { name: "Report steps" })
+    .getByRole("link", { name: "Opening, done" });
+  await opening.click();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Go Back" }).click();
+  await expect(leave).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`${SUMMARY}$`));
+  await expect(reasonBox(page)).toHaveValue("Paid a courier and parking");
+
+  await opening.click();
+  await leave.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page).toHaveURL(new RegExp(`/reports/${REPORT}/opening$`));
+  await expect(page.getByRole("button", { name: "Done editing" })).toBeVisible();
+  expect(sent.edits).toEqual([]);
+  expect(native).toEqual([]);
+});
+
+test("Edit Details: Done editing with an unsaved change asks; Discard leaves the mode with the saved value", async ({
+  page,
+}) => {
+  await openDetails(page);
+  await page.getByRole("radio", { name: "Company Bank" }).check();
+  await page.getByRole("button", { name: "Done editing" }).click();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page.getByRole("button", { name: "Edit Details" })).toBeVisible();
+  await page.getByRole("button", { name: "Edit Details" }).click();
+  await expect(page.getByRole("radio", { name: "Personal" })).toBeChecked();
+});
+
+test("Edit Details: the browser's Back with an unsaved change asks in the page", async ({
+  page,
+}) => {
+  await openDetails(page);
+  await reasonBox(page).fill("Something else");
+  await page.goBack();
+  await expect(page.getByRole("dialog", { name: "Leave without saving?" })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`${SUMMARY}$`));
+});
+
+test("Edit Details: once saved, leaving does not ask", async ({ page }) => {
+  await openDetails(page, {
+    onEdit: fulfil(
+      edited({
+        cash: {
+          ...(editable().cash as Json),
+          difference: { amount: -11, kind: "short", reason: "Paid a courier and parking" },
+        },
+      }),
+    ),
+  });
+  await reasonBox(page).fill("Paid a courier and parking");
+  await page.getByRole("button", { name: "Save changes" }).first().click();
+  await expect(toast(page, "Your discrepancy reason is saved.")).toBeVisible();
+  await page.getByRole("button", { name: "Done editing" }).click();
+  await expect(page.getByRole("dialog", { name: "Leave without saving?" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Edit Details" })).toBeVisible();
+});
+
 test("Edit Details: hidden without edit_details - no button, no editors", async ({ page }) => {
   await openView(page);
   await expect(page.getByRole("button", { name: "Edit Details" })).toHaveCount(0);
   await expect(reasonBox(page)).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Addition to Cash Drawer" })).toHaveCount(0);
   await expect(page.getByText("Paid a courier")).toBeVisible();
+});
+
+test("Edit Details from report history: ?edit=details opens the view in the mode, then leaves the address", async ({
+  page,
+}) => {
+  await stub(page, { report: editable() });
+  await enter(page, `${SUMMARY}?edit=details`);
+  await expect(page.getByRole("button", { name: "Done editing" })).toBeVisible();
+  await expect(reasonBox(page)).toHaveValue("Paid a courier");
+  // a reload opens the plain view: the mode was asked for once
+  await expect(page).toHaveURL((url) => url.pathname === SUMMARY && url.search === "");
+  await expectNoHorizontalScroll(page);
+  await page.getByRole("button", { name: "Done editing" }).click();
+  await expect(page.getByRole("button", { name: "Close", exact: true })).toBeVisible();
+});
+
+test("Edit Details from report history: without edit_details the address opens the plain view", async ({
+  page,
+}) => {
+  await stub(page);
+  await enter(page, `${SUMMARY}?edit=details`);
+  await expect(page.getByRole("heading", { name: "Summary", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Done editing" })).toHaveCount(0);
+  await expect(reasonBox(page)).toHaveCount(0);
 });
 
 test("Edit Details: no warning (Flask's had none), Close hides, Done editing leaves the mode", async ({
@@ -1088,7 +1300,7 @@ test("Edit Details: a line's refusal is said at its field; a 409 under Save", as
   await expect(modal).toBeVisible();
 });
 
-test("Edit Details: Escape keeps an editor with changes open (Flask's toast); Close discards them", async ({
+test("Edit Details: Escape keeps an editor with changes open (Flask's toast); Close asks before discarding them", async ({
   page,
 }) => {
   const sent = await openDetails(page);
@@ -1102,7 +1314,17 @@ test("Edit Details: Escape keeps an editor with changes open (Flask's toast); Cl
     toast(page, "You have unsaved changes. Please save your changes first."),
   ).toBeVisible();
   await expect(modal).toBeVisible();
+  // owner, 2026-11-17: Close no longer discards silently - it asks in the page
   await modal.getByRole("button", { name: "Close", exact: true }).click();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await expect(leave.getByText("You have unsaved changes.")).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await leave.getByRole("button", { name: "Go Back" }).click();
+  await expect(leave).toHaveCount(0);
+  await expect(modal.getByLabel("Supplier")).toHaveValue("s2");
+  await modal.getByRole("button", { name: "Close", exact: true }).click();
+  await leave.getByRole("button", { name: "Discard changes" }).click();
   await expect(modal).toHaveCount(0);
   await linesCard(page)
     .getByRole("button", { name: /Food & Drink/ })

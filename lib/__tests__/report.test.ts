@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { salesSplit } from "@/lib/ending";
 import {
   DELETE_IN_XERO,
+  deleteXero,
   editReasonProblem,
   editReceiptProblem,
   lineChanges,
@@ -75,12 +76,21 @@ describe("Flask's Submitted page wording", () => {
   });
 });
 
-describe("the owner's Xero warning on Delete (2026-10-15)", () => {
-  it("is Flask's wording", () => {
+describe("the Xero note on Delete (owner, 2026-11-17)", () => {
+  it("says the entries come out of Xero, or stay there with no record of them", () => {
     expect(DELETE_IN_XERO.title).toBe("It is in Xero");
-    expect(DELETE_IN_XERO.body).toBe(
-      "Deleting it here does not remove its entries in Xero, and publishing this day again adds a second copy. To change the report, use Edit report instead.",
+    expect(DELETE_IN_XERO.removes).toBe(
+      "Deleting it here also removes its entries from Xero. If Xero refuses any of them, the report is kept and I'll list what to sort out in Xero first.",
     );
+    expect(DELETE_IN_XERO.stays).toBe(
+      "I can't remove this report's entries from Xero, so they stay there. Remove them in Xero by hand after deleting.",
+    );
+  });
+
+  it("chooses by whether the report has been to Xero and its entries are recorded", () => {
+    expect(deleteXero(false, false)).toBeNull();
+    expect(deleteXero(true, true)).toBe("removes");
+    expect(deleteXero(true, false)).toBe("stays");
   });
 });
 

@@ -30,6 +30,8 @@ export type DailyReport = {
   xero_integrated: boolean;
   /** Ever sent to Xero (an edit after a publish clears `xero_integrated`, not this). */
   was_published: boolean;
+  /** Its entries are recorded for the company's Xero organisation: a delete takes them out (2026-11-17). */
+  xero_removable: boolean;
   kpis: { total_sales: number; total_expenses: number; cash_position: number };
   sales: {
     /** Every method with an amount on the report - the cash row (`cash_sales`) among them. */
@@ -153,24 +155,43 @@ export function publishLabel(xero: ReportOutcome["xero"]): string {
 export const DELETE_WARNING =
   "Are you sure you want to delete this report? This action cannot be undone.";
 
-/** The owner's rule (2026-10-15): a report that has been to Xero may be deleted, after this - Flask's wording. */
+/**
+ * Said before deleting a report that has been to Xero (owner, 2026-11-17): its entries come out of
+ * Xero with it - or, with no record of them (the old system's reports, another organisation), stay
+ * there. Only an accountant and up sees Delete on such a report (the API's `permissions.delete`).
+ */
 export const DELETE_IN_XERO = {
   title: "It is in Xero",
-  body: "Deleting it here does not remove its entries in Xero, and publishing this day again adds a second copy. To change the report, use Edit report instead.",
+  removes:
+    "Deleting it here also removes its entries from Xero. If Xero refuses any of them, the report is kept and I'll list what to sort out in Xero first.",
+  stays:
+    "I can't remove this report's entries from Xero, so they stay there. Remove them in Xero by hand after deleting.",
 } as const;
+
+/** What the delete modal says about Xero: its entries come out, stay, or it was never there. */
+export type DeleteXero = "removes" | "stays" | null;
+
+export function deleteXero(wasPublished: boolean, xeroRemovable: boolean): DeleteXero {
+  if (!wasPublished) return null;
+  return xeroRemovable ? "removes" : "stays";
+}
+
+/** The overlay while a delete takes a report's entries out of Xero (a few seconds). */
+export const REMOVING_FROM_XERO = "Removing it from Xero...";
 
 /** Said on the dashboard after a delete. */
 export const DELETED = "That report's deleted.";
 
 /**
- * Asked before reopening a report that has been to Xero - Flask's confirm, word for word, now an
- * in-page modal (no native browser dialog, owner 2026-11-16); "Continue?" is its button.
+ * Said when a report that has been to Xero is changed (owner, 2026-11-17): before reopening it (an
+ * in-page modal, no native browser dialog, owner 2026-11-16) and while its Edit Details is open. A
+ * republish updates the entries it made in Xero (minty-petty-cash-api `xero/publish_record.py`), so
+ * nothing here warns of duplicates any more - Flask's "will create duplicate entries ... voided in
+ * Xero by hand" no longer held.
  */
 export const EDIT_PUBLISHED = {
-  title: "This report was already published to Xero.",
-  body:
-    "Editing it and publishing again will create duplicate entries in Xero — " +
-    "the originals are not removed automatically and must be voided in Xero by hand.",
+  title: "This report is in Xero.",
+  body: "Your changes reach Xero only when you publish the report again.",
 } as const;
 
 /** The API's limit on a line's description (`MAX_DESCRIPTION` in `report_edits.py`). */

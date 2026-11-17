@@ -187,11 +187,11 @@ function Submitted({
         {outcome.can_publish ? (
           <button
             type="button"
-            // a report that has been to Xero goes through Flask's confirm: publishing again duplicates it
+            // a report that has been to Xero goes through Flask's confirm: publishing again updates it there
             onClick={() =>
               publish.ask({
                 reportId: outcome.report_id,
-                confirm: outcome.xero.was_published ? { duplicate: true } : null,
+                confirm: outcome.xero.was_published ? { inXero: true } : null,
               })
             }
             disabled={busy !== null || publish.busy}

@@ -492,7 +492,7 @@ const EXPAND = (
  *
  * With `editor` (a submitted report's Edit Details, Flask's report_edit mode) the editor takes the
  * grey box's place, and `onDismiss` - Escape or a click outside - may refuse while it holds changes;
- * Close always closes (discarding them), as Flask's did.
+ * Close closes; the Edit Details line editor asks first when it holds changes (`guardLeave`).
  *
  * With `onEdit` (a draft's line in the Expenses step) an Edit button sits before Close.
  */

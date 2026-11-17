@@ -25,7 +25,7 @@ const HISTORY = `${BASE}/reports`;
 const LIST = /\/api\/petty-cash\/v1\/companies\/[^/]+\/reports(\?.*)?$/;
 /** minty-web's Entity & Integration, where Xero is connected (`next` of Flask's hand-off). */
 const INTEGRATION = `/entity/${companyRef(ENTITY, NAME)}/settings/integration`;
-const RECONNECT_LINK = "Reconnect Xero in Entity & Integration";
+const RECONNECT_LINK = "Reconnect Xero in Integration"; // the hub's Integration tab (b3dbdb3, 2026-11-11)
 const RECONNECT = "I've lost access to your Xero account. Mind reconnecting it in Settings?";
 
 type Json = Record<string, unknown>;
@@ -320,7 +320,7 @@ for (const [why, code, sentence] of [
   });
 }
 
-test("Submitted: a refusal that needs Xero connected again says so and links to minty-web's Entity & Integration", async ({
+test("Submitted: a refusal that needs Xero connected again says so and links to minty-web's Integration tab", async ({
   page,
 }) => {
   const sent = await openSubmitted(page, {
@@ -347,17 +347,16 @@ test("Submitted: a refusal that needs Xero connected again says so and links to 
   );
 });
 
-test("Submitted: Republish warns of duplicates first; Cancel sends nothing, Confirm republishes", async ({
+test("Submitted: Republish says the report is in Xero and is updated there; Cancel sends nothing, Confirm republishes", async ({
   page,
 }) => {
   const sent = await openSubmitted(page, { outcome: IN_XERO });
   await page.getByRole("button", { name: "Republish to Xero" }).click();
   const dialog = page.getByRole("dialog", { name: "Republish Report" });
   await expect(
-    dialog.getByText(
-      "This report was previously published. This action may create duplicate entries in Xero.",
-    ),
+    dialog.getByText("This report is in Xero. Publishing again updates its entries there."),
   ).toBeVisible();
+  await expect(dialog.getByText(/duplicate/)).toHaveCount(0);
   await expect(dialog.getByText("Do you wish to continue?")).toBeVisible();
   await expectNoHorizontalScroll(page);
   await dialog.getByRole("button", { name: "Cancel" }).click();
@@ -374,7 +373,7 @@ test("Submitted: Republish warns of duplicates first; Cancel sends nothing, Conf
   expect(sent.publish).toHaveLength(1);
 });
 
-test("Submitted: a report edited after a publish reads Publish to Xero, but warns of duplicates first (the API's was_published)", async ({
+test("Submitted: a report edited after a publish reads Publish to Xero, but confirms first (the API's was_published)", async ({
   page,
 }) => {
   const sent = await openSubmitted(page, {
@@ -474,26 +473,25 @@ test("History: Publish from the row menu polls to success, says so and reads the
   await expect.poll(() => sent.lists).toBe(lists + 1);
 });
 
-test("History: Republish confirms - with the duplicates warning only for a report fully in Xero", async ({
+test("History: Republish confirms - saying it is in Xero only for a report fully in Xero", async ({
   page,
 }) => {
   const sent = await openHistory(page);
   await fromMenu(page, PUBLISHED, "Republish");
   let dialog = page.getByRole("dialog", { name: "Republish Report" });
   await expect(
-    dialog.getByText(
-      "I've already published this report — republishing may create duplicates in Xero.",
-    ),
+    dialog.getByText("This report is in Xero. Publishing again updates its entries there."),
   ).toBeVisible();
+  await expect(dialog.getByText(/duplicate/)).toHaveCount(0);
   await expect(dialog.getByText("Still want to go ahead?")).toBeVisible();
   await dialog.getByRole("button", { name: "Close" }).click();
   expect(sent.publish).toEqual([]);
 
-  // a failed (partly published) one is re-sent selectively: no duplicates warning
+  // a failed (partly published) one is re-sent selectively: no "in Xero" line
   await fromMenu(page, FAILED, "Republish");
   dialog = page.getByRole("dialog", { name: "Republish Report" });
   await expect(dialog.getByText("Still want to go ahead?")).toBeVisible();
-  await expect(dialog.getByText(/duplicates/)).toHaveCount(0);
+  await expect(dialog.getByText(/This report is in Xero/)).toHaveCount(0);
   await dialog.getByRole("button", { name: "Confirm" }).click();
   await expect(page.getByRole("dialog", { name: "Republishing to Xero..." })).toBeVisible();
   await expect(toast(page, "Report published to Xero successfully!")).toBeVisible({
@@ -502,16 +500,14 @@ test("History: Republish confirms - with the duplicates warning only for a repor
   expect(sent.publish).toEqual([`${FAILED}/publish`]);
 });
 
-test("History: Publish on a report edited after a publish warns of duplicates first", async ({
+test("History: Publish on a report edited after a publish says it is in Xero first", async ({
   page,
 }) => {
   const sent = await openHistory(page, { rows: [row({ was_published: true }), ...ROWS.slice(1)] });
   await fromMenu(page, REPORT, "Publish");
   const dialog = page.getByRole("dialog", { name: "Republish Report" });
   await expect(
-    dialog.getByText(
-      "I've already published this report — republishing may create duplicates in Xero.",
-    ),
+    dialog.getByText("This report is in Xero. Publishing again updates its entries there."),
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Cancel" }).click();
   expect(sent.publish).toEqual([]);
@@ -535,7 +531,7 @@ test("History: a partial publish says its reasons and the list is read again", a
   await expect.poll(() => sent.lists).toBe(lists + 1);
 });
 
-test("History: a refused start says the sentence; reconnect links to minty-web's Entity & Integration", async ({
+test("History: a refused start says the sentence; reconnect links to minty-web's Integration tab", async ({
   page,
 }) => {
   const busy = "Publishing already in progress. Please wait...";

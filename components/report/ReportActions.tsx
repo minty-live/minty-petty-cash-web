@@ -4,9 +4,16 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 
 import { useToast } from "@/components/flask/Toasts";
+import { ReconnectModal } from "@/components/report/Publish";
 import { Modal } from "@/components/report/ReportChrome";
 import { ApiError, HOUSE_FALLBACK, pettyCashFetch } from "@/lib/apiClient";
-import { DELETE_IN_XERO, DELETE_WARNING, EDIT_PUBLISHED } from "@/lib/report";
+import {
+  DELETE_IN_XERO,
+  DELETE_WARNING,
+  EDIT_PUBLISHED,
+  REMOVING_FROM_XERO,
+  type DeleteXero,
+} from "@/lib/report";
 import { shareUrl } from "@/lib/share";
 import { stepHref } from "@/lib/wizardPages";
 
@@ -127,8 +134,19 @@ export function useEditReport(
   return { edit, ui };
 }
 
-/** The amber "it is in Xero" note the Delete and Edit modals open with. */
-function AmberNote({ className, title, body }: { className: string; title: string; body: string }) {
+/**
+ * The amber "it is in Xero" note the Delete and Edit modals open with; also the report view's while
+ * Edit Details is open on a report that has been to Xero (owner, 2026-11-17).
+ */
+export function AmberNote({
+  className,
+  title,
+  body,
+}: {
+  className: string;
+  title: string;
+  body: string;
+}) {
   return (
     <div
       className={`${className} flex items-start rounded-[8px] border-l-4 border-l-flask-amber-edge bg-flask-amber-bg px-4 py-3`}
@@ -359,16 +377,23 @@ export function ShareModal({ url, onClose }: { url: string | null; onClose: () =
   );
 }
 
+/** Xero refused to take the report's entries out: the API's sentence and what to sort out there. */
+export type DeleteRefusal = { message: string; reasons: string[] };
+
 /**
  * Flask's "Delete Report" (#deleteReportModal): the red warning, then Cancel / Delete. A report that
- * has been to Xero is warned about first (the owner's rule, 2026-10-15, in Flask's own words).
+ * has been to Xero says first whether its entries come out of Xero with it (`xero`, owner
+ * 2026-11-17). When Xero refused (`refusal`), the modal stays open with the API's sentence and the
+ * list of what to sort out in Xero, and Delete reads "Try again".
  */
 export function DeleteReportModal({
-  wasPublished,
+  xero,
+  refusal = null,
   onCancel,
   onDelete,
 }: {
-  wasPublished: boolean;
+  xero: DeleteXero;
+  refusal?: DeleteRefusal | null;
   onCancel: () => void;
   onDelete: () => void;
 }) {
@@ -392,18 +417,34 @@ export function DeleteReportModal({
         </button>
       </div>
 
-      {wasPublished ? (
-        <AmberNote className="mb-4" title={DELETE_IN_XERO.title} body={DELETE_IN_XERO.body} />
+      {xero ? (
+        <AmberNote className="mb-4" title={DELETE_IN_XERO.title} body={DELETE_IN_XERO[xero]} />
       ) : null}
 
-      <div className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4">
+      <div
+        className="mb-6 rounded-flask-lg border border-flask-danger-edge bg-flask-danger-bg p-4"
+        role={refusal ? "alert" : undefined}
+      >
         <div className="flex items-start">
           <div className="flex-shrink-0">{NOTE_ICON}</div>
-          <div className="ml-3">
-            <p className="text-sm text-flask-danger-ink">
-              <span className="font-bold">Warning:</span>
-            </p>
-            <p className="mt-1 text-sm text-flask-danger-ink">{DELETE_WARNING}</p>
+          <div className="ml-3 min-w-0">
+            {refusal ? (
+              <>
+                <p className="text-sm text-flask-danger-ink">{refusal.message}</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-flask-danger-ink [overflow-wrap:anywhere]">
+                  {refusal.reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-flask-danger-ink">
+                  <span className="font-bold">Warning:</span>
+                </p>
+                <p className="mt-1 text-sm text-flask-danger-ink">{DELETE_WARNING}</p>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -421,9 +462,100 @@ export function DeleteReportModal({
           onClick={onDelete}
           className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
         >
-          <span>Delete</span>
+          <span>{refusal ? "Try again" : "Delete"}</span>
         </button>
       </div>
     </Modal>
   );
+}
+
+/** A report a Delete is asked for: whether it has been to Xero, and whether its entries can come out. */
+export type DeleteTarget = { id: string; xero: DeleteXero };
+
+/**
+ * Delete, as the report's view and report history both do it: the modal, then
+ * `DELETE /reports/<id>` under the page's overlay ("Removing it from Xero..." when its entries come
+ * out of Xero). A refusal from Xero (`reasons`, owner 2026-11-17) keeps the modal open with the list
+ * and Try again; one asking for Xero to be reconnected opens the reconnect dialog; any other says
+ * the API's sentence. `onDeleted` takes over on success (the page's overlay, toast and way on).
+ */
+export function useDeleteReport({
+  entityId,
+  entityName,
+  actingRef,
+  setBusy,
+  onDeleted,
+}: {
+  entityId: string;
+  entityName: string;
+  actingRef: RefObject<boolean>;
+  setBusy: (text: string | null) => void;
+  onDeleted: (target: DeleteTarget) => Promise<void> | void;
+}): { ask: (target: DeleteTarget) => void; ui: ReactNode } {
+  const toast = useToast();
+  const [target, setTarget] = useState<DeleteTarget | null>(null);
+  const [refusal, setRefusal] = useState<DeleteRefusal | null>(null);
+  const [reconnect, setReconnect] = useState<string | null>(null);
+
+  function close() {
+    setTarget(null);
+    setRefusal(null);
+  }
+
+  async function remove(asked: DeleteTarget) {
+    if (actingRef.current) return;
+    actingRef.current = true;
+    setBusy(asked.xero === "removes" ? REMOVING_FROM_XERO : "Deleting report...");
+    try {
+      await pettyCashFetch(`/reports/${encodeURIComponent(asked.id)}`, { method: "DELETE" });
+    } catch (err) {
+      actingRef.current = false;
+      setBusy(null);
+      if (err instanceof ApiError && err.status === 401) return;
+      const body =
+        err instanceof ApiError
+          ? (err.body as { reasons?: unknown; reconnect?: unknown } | null)
+          : null;
+      const reasons = Array.isArray(body?.reasons) ? body.reasons.map(String) : [];
+      if (err instanceof ApiError && reasons.length > 0) {
+        setRefusal({ message: err.message, reasons });
+        return;
+      }
+      close();
+      if (err instanceof ApiError && body?.reconnect === true) setReconnect(err.message);
+      else toast(err instanceof ApiError ? err.message : UNREACHABLE, "error");
+      return;
+    }
+    close();
+    await onDeleted(asked);
+  }
+
+  const ui = (
+    <>
+      {target ? (
+        <DeleteReportModal
+          xero={target.xero}
+          refusal={refusal}
+          onCancel={close}
+          onDelete={() => void remove(target)}
+        />
+      ) : null}
+      {reconnect ? (
+        <ReconnectModal
+          message={reconnect}
+          entityId={entityId}
+          entityName={entityName}
+          onClose={() => setReconnect(null)}
+        />
+      ) : null}
+    </>
+  );
+
+  return {
+    ask: (asked) => {
+      setRefusal(null);
+      setTarget(asked);
+    },
+    ui,
+  };
 }
