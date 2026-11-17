@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { changed, flaskLabel, salesTotals, sections, type SalesMethod } from "@/lib/sales";
+import { changed, flaskLabel, partsOf, salesTotals, sections, type SalesMethod } from "@/lib/sales";
 
 const method = (value_name: string, type: SalesMethod["type"], name = value_name): SalesMethod => ({
   sale_id: value_name,
@@ -109,5 +109,50 @@ describe("unsaved changes (Flask's hasUnsavedChanges)", () => {
     ["-", "", false],
   ])("%j against %j is %s", (now, initial, expected) => {
     expect(changed(now, initial)).toBe(expected);
+  });
+});
+
+// The parts follow onboarding's sales accounts (owner, 2026-11-17; Figma 464:73 row 3).
+describe("the parts a company takes", () => {
+  const methods = [
+    method("visa_sales", "electronic"),
+    method("foodpanda_sales", "delivery"),
+    method("fps_sales", "electronic"),
+  ];
+
+  it("shows every part when the API says nothing (an older API)", () => {
+    expect(partsOf({})).toEqual({ cash: true, electronic: true, delivery: true });
+  });
+
+  it("keeps what the API says", () => {
+    expect(partsOf({ parts: { cash: false, electronic: true, delivery: false } })).toEqual({
+      cash: false,
+      electronic: true,
+      delivery: false,
+    });
+  });
+
+  it("a Non-cash company that ticked Delivery gets its delivery methods in their own part", () => {
+    const { electronic, delivery } = sections(methods, "non_cash", {
+      cash: true,
+      electronic: true,
+      delivery: true,
+    });
+    expect(electronic.map((m) => m.value_name)).toEqual(["visa_sales", "fps_sales"]);
+    expect(delivery.map((m) => m.value_name)).toEqual(["foodpanda_sales"]);
+  });
+
+  it("an unticked part lists nothing and adds nothing", () => {
+    const parts = { cash: false, electronic: true, delivery: false };
+    expect(sections(methods, "electronic_delivery", parts).delivery).toEqual([]);
+    expect(
+      salesTotals(
+        methods,
+        { visa_sales: "10", foodpanda_sales: "99", fps_sales: "1" },
+        "7",
+        "electronic_delivery",
+        parts,
+      ),
+    ).toEqual({ electronic: 11, delivery: 0, cash: 0 });
   });
 });

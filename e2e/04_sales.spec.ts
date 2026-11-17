@@ -227,10 +227,15 @@ test("unsaved changes hold the stepper back", async ({ page }) => {
   await openWith(page, salesAnswer());
   await page.getByRole("textbox", { name: "Cash Sales" }).fill("5");
   await page.getByRole("link", { name: /^Opening/ }).click();
-  await expect(
-    toast(page, "You have unsaved changes. Please save your changes first."),
-  ).toBeVisible();
+  // owner, 2026-11-17: "Leave without saving?" in the page, never Flask's toast
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Go Back" }).click();
   await expect(page.getByRole("heading", { name: "Sales Entry" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Cash Sales" })).toHaveValue(/^5(\.00)?$/);
+  await page.getByRole("link", { name: /^Opening/ }).click();
+  await leave.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page).toHaveURL(/\/reports\/new\/opening\?/);
 });
 
 test("Save & Exit goes home", async ({ page }) => {

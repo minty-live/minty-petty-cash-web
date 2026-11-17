@@ -33,7 +33,21 @@ export type SalesPage = {
   methods: SalesMethod[];
   cash_sales: number | null;
   groups?: SalesGroups;
+  /** The parts the company takes - onboarding's ticked sales accounts (owner, 2026-11-17). Absent
+   * from an older API: every part. */
+  parts?: SalesParts;
 };
+
+/** Sales - Cash, Sales - Electronic Payment, Sales - Delivery ticked or not (the API's `sales_parts`). */
+export type SalesParts = { cash: boolean; electronic: boolean; delivery: boolean };
+
+const EVERY_PART: SalesParts = { cash: true, electronic: true, delivery: true };
+
+/** The page's parts: what the API says; from an older API, every part a company had before
+ * (a Non-cash company had no Delivery part). */
+export function partsOf(page: Pick<SalesPage, "parts" | "groups">): SalesParts {
+  return page.parts ?? { ...EVERY_PART, delivery: page.groups !== "non_cash" };
+}
 
 /** The method the save has always skipped, so it is never offered (Flask's Ending left it out of both
  * lists; its Sales page only out of delivery, and dropped what was typed there). */
@@ -56,16 +70,20 @@ export function flaskLabel(name: string): string {
 export function sections<M extends Pick<SalesMethod, "type" | "value_name">>(
   methods: M[],
   groups: SalesGroups = "electronic_delivery",
+  parts: SalesParts = partsOf({ groups }),
 ): {
   electronic: M[];
   delivery: M[];
 } {
-  if (groups === "non_cash") {
-    return { electronic: methods.filter((m) => m.value_name !== SKIPPED), delivery: [] };
+  const kept = methods.filter((m) => m.value_name !== SKIPPED);
+  // A Non-cash company without a Delivery part keeps every method in its one section; one that
+  // ticked Delivery (2026-11-17) gets its delivery methods in their own part.
+  if (groups === "non_cash" && !parts.delivery) {
+    return { electronic: parts.electronic ? kept : [], delivery: [] };
   }
   return {
-    electronic: methods.filter((m) => m.type === "electronic" && m.value_name !== SKIPPED),
-    delivery: methods.filter((m) => m.type === "delivery" && m.value_name !== SKIPPED),
+    electronic: parts.electronic ? kept.filter((m) => m.type === "electronic") : [],
+    delivery: parts.delivery ? kept.filter((m) => m.type === "delivery") : [],
   };
 }
 
@@ -75,11 +93,16 @@ export function salesTotals(
   values: Record<string, string>,
   cash: string,
   groups: SalesGroups = "electronic_delivery",
+  parts: SalesParts = partsOf({ groups }),
 ): { electronic: number; delivery: number; cash: number } {
-  const { electronic, delivery } = sections(methods, groups);
+  const { electronic, delivery } = sections(methods, groups, parts);
   const sum = (list: SalesMethod[]) =>
     list.reduce((total, m) => total + parseMoney(values[m.value_name] ?? ""), 0);
-  return { electronic: sum(electronic), delivery: sum(delivery), cash: parseMoney(cash) };
+  return {
+    electronic: sum(electronic),
+    delivery: sum(delivery),
+    cash: parts.cash ? parseMoney(cash) : 0,
+  };
 }
 
 /**

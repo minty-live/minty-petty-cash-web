@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
 import { formatAmount } from "@minty/shared/money";
@@ -10,6 +10,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { LoadingOverlay, ReportBadge } from "@/components/report/ReportChrome";
+import { useStepLeave } from "@/components/report/StepLeave";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome } from "@/lib/companyPages";
@@ -19,6 +20,7 @@ import { datePill } from "@/lib/opening";
 import {
   changed,
   flaskLabel,
+  partsOf,
   salesTotals,
   sections,
   type SalesMethod,
@@ -28,7 +30,6 @@ import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP } from "@/lib/wizardPages";
 
 const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then reload the page.";
-const UNSAVED = "You have unsaved changes. Please save your changes first.";
 
 type SaveAnswer = { next: "expenses" | "dashboard"; transaction_date: string };
 
@@ -119,8 +120,10 @@ function SalesForm({
   const progress = page.draft ?? { current_section: null, completed_sections: [] };
   // One Non-cash section for a retail shop, a service or a general business (owner, 2026-11-11)
   const nonCash = page.groups === "non_cash";
-  const { electronic, delivery } = sections(page.methods, page.groups);
-  const totals = salesTotals(page.methods, values, cash, page.groups);
+  // Only the parts whose sales account is ticked in onboarding (owner, 2026-11-17; Figma 464:73 row 3)
+  const parts = partsOf(page);
+  const { electronic, delivery } = sections(page.methods, page.groups, parts);
+  const totals = salesTotals(page.methods, values, cash, page.groups, parts);
 
   function dirty(): boolean {
     return (
@@ -131,24 +134,26 @@ function SalesForm({
     );
   }
 
-  function onStepClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (dirty()) {
-      event.preventDefault();
-      toast(UNSAVED, "warning");
-    }
-  }
+  // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
+  const leave = useStepLeave(dirty());
 
   async function save(action: "next" | "exit") {
     setSaving(true);
     try {
+      // Only the fields the page shows; a hidden part sends nothing (the API writes it no row).
       const amounts = Object.fromEntries(
-        page.methods
+        [...electronic, ...delivery]
           .filter((m) => (values[m.value_name] ?? "") !== "")
           .map((m) => [m.value_name, parseMoney(values[m.value_name])]),
       );
       const answer = await pettyCashFetch<SaveAnswer>("/reports/sales", {
         method: "PUT",
-        json: { transaction_date: day, cash_sales: parseMoney(cash), amounts, action },
+        json: {
+          transaction_date: day,
+          cash_sales: parts.cash ? parseMoney(cash) : 0,
+          amounts,
+          action,
+        },
       });
       if (answer.next === "dashboard") {
         router.push(home);
@@ -196,10 +201,14 @@ function SalesForm({
           draft={progress}
           page="sales"
           stepHref={(step) => stepHref(entityId, entityName, step, day)}
-          onStepClick={onStepClick}
         />
       }
-      overlays={saving ? <LoadingOverlay /> : null}
+      overlays={
+        <>
+          {leave}
+          {saving ? <LoadingOverlay /> : null}
+        </>
+      }
     >
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Sales Entry</h2>
@@ -212,41 +221,46 @@ function SalesForm({
         }}
       >
         <div className="mb-6 rounded-flask-lg bg-flask-white p-6 shadow-flask-sm">
-          <Section
-            icon={<CardIcon />}
-            title={nonCash ? "Non-cash Sales" : "Electronic Payments"}
-            smallTitle
-          >
-            <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {electronic.map(field)}
-            </div>
-            <Total
-              label={nonCash ? "Total Non-cash Sales" : "Total Electronic Payment Sales"}
-              amount={formatMoney(totals.electronic, code)}
-            />
-          </Section>
+          {parts.electronic ? (
+            <Section
+              icon={<CardIcon />}
+              title={nonCash ? "Non-cash Sales" : "Electronic Payments"}
+              smallTitle
+            >
+              <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {electronic.map(field)}
+              </div>
+              <Total
+                label={nonCash ? "Total Non-cash Sales" : "Total Electronic Payment Sales"}
+                amount={formatMoney(totals.electronic, code)}
+              />
+            </Section>
+          ) : null}
 
-          {nonCash ? null : (
+          {/* A Non-cash company has Delivery only when it ticked it (2026-11-17) */}
+          {parts.delivery ? (
             <Section icon={<TruckIcon />} title="Delivery Sales">
               <div className="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {delivery.map(field)}
               </div>
               <Total label="Total Delivery Sales" amount={formatMoney(totals.delivery, code)} />
             </Section>
-          )}
+          ) : null}
 
-          <Section icon={<CashIcon />} title="Cash Sales">
-            <div className="mb-3">
-              <MoneyInput
-                id="sales_cash_sales"
-                ariaLabel="Cash Sales"
-                code={code}
-                value={cash}
-                onChange={setCash}
-              />
-            </div>
-            <Total label="Total Cash Sales" amount={formatMoney(totals.cash, code)} />
-          </Section>
+          {parts.cash ? (
+            <Section icon={<CashIcon />} title="Cash Sales">
+              <div className="mb-3">
+                <MoneyInput
+                  id="sales_cash_sales"
+                  ariaLabel="Cash Sales"
+                  code={code}
+                  value={cash}
+                  onChange={setCash}
+                />
+              </div>
+              <Total label="Total Cash Sales" amount={formatMoney(totals.cash, code)} />
+            </Section>
+          ) : null}
         </div>
 
         <div>
