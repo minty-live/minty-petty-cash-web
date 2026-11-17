@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
 import { formatAmount } from "@minty/shared/money";
@@ -9,6 +9,7 @@ import { formatAmount } from "@minty/shared/money";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
   FixNegativeBalanceModal,
@@ -32,7 +33,6 @@ import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP, type WizardStep } from "@/lib/wizardPages";
 
 const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then reload the page.";
-const UNSAVED = "You have unsaved changes. Please save your changes first.";
 const SAVE_FAILED = "I couldn't save that. Mind trying again?";
 
 type SaveAnswer = { next: "cash_count" | "dashboard"; transaction_date: string };
@@ -133,13 +133,6 @@ function DepositForm({
     refused ??
     (page.cash_on_hand < 0 ? null : depositProblem(parseMoney(amount), page.cash_on_hand, code));
 
-  function onStepClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (changed(amount, initial)) {
-      event.preventDefault();
-      toast(UNSAVED, "warning");
-    }
-  }
-
   function go(step: WizardStep) {
     router.push(stepHref(entityId, entityName, step, day));
   }
@@ -179,8 +172,12 @@ function DepositForm({
     go(step);
   }
 
+  // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
+  const leave = useStepLeave(changed(amount, initial));
+
   const overlays = (
     <>
+      {leave}
       {busy ? <LoadingOverlay text={busy} /> : null}
       {negative ? (
         <FixNegativeBalanceModal
@@ -224,7 +221,6 @@ function DepositForm({
           draft={progress}
           page="deposit"
           stepHref={(step) => stepHref(entityId, entityName, step, day)}
-          onStepClick={onStepClick}
         />
       }
       overlays={overlays}

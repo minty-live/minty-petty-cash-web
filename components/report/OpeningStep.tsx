@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
 import { formatAmount } from "@minty/shared/money";
@@ -10,6 +10,7 @@ import { formatAmount } from "@minty/shared/money";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FixNegativeBalanceModal,
   FixStepButton,
@@ -27,7 +28,6 @@ import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP } from "@/lib/wizardPages";
 
 const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then reload the page.";
-const UNSAVED = "You have unsaved changes. Please save your changes first.";
 
 type SaveAnswer = { next: "sales" | "dashboard"; transaction_date: string };
 
@@ -119,13 +119,6 @@ function OpeningForm({
     return now !== "" && now !== "-" && now !== initialAddition.replace(/,/g, "");
   }
 
-  function onStepClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (dirty()) {
-      event.preventDefault();
-      toast(UNSAVED, "warning");
-    }
-  }
-
   async function save(action: "next" | "exit") {
     if (opening < 0) {
       setNegative(true);
@@ -155,8 +148,12 @@ function OpeningForm({
     }
   }
 
+  // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
+  const leave = useStepLeave(dirty());
+
   const overlays = (
     <>
+      {leave}
       {saving ? <LoadingOverlay /> : null}
       {negative ? (
         <OpeningNegativeModal
@@ -184,7 +181,6 @@ function OpeningForm({
           draft={progress}
           page="opening"
           stepHref={(step) => stepHref(entityId, entityName, step, day)}
-          onStepClick={onStepClick}
         />
       }
       overlays={overlays}

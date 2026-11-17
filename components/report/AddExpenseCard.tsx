@@ -106,6 +106,8 @@ export type AddExpenseProps = {
   /** Edit Expense: the line as the API answers it after Save, with the new total. */
   onSaved?: (line: ExpenseLine, total: number) => void;
   onCancel: () => void;
+  /** Whether the card holds input not saved yet - the wizard asks before leaving it (2026-11-17). */
+  onDirty?: (dirty: boolean) => void;
   /** The phone card's overlay: its text while something is sent, null when done. */
   setBusy: (text: string | null) => void;
   /** The API found no draft for the day: back to Opening with its sentence. */
@@ -139,6 +141,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
     line = null,
     onSaved,
     onCancel,
+    onDirty,
     setBusy,
     onNoDraft,
   } = props;
@@ -183,6 +186,20 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const pickedRef = useRef<Picked | null>(null);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
+  // input not saved yet: a saved line's fields changed or a new receipt; a new line's anything typed
+  const holdsInput =
+    file !== null ||
+    (line
+      ? Object.keys(lineEdits(line, { amount, description, supplier, account })).length > 0
+      : [amount, description, supplierText, accountText].some((v) => (v ?? "").trim() !== ""));
+  const onDirtyRef = useRef(onDirty);
+  useEffect(() => {
+    onDirtyRef.current = onDirty;
+  });
+  useEffect(() => {
+    onDirtyRef.current?.(holdsInput);
+  }, [holdsInput]);
+  useEffect(() => () => onDirtyRef.current?.(false), []);
   const [newContact, setNewContact] = useState<string | null>(null);
   const newContactField = useRef<HTMLInputElement>(null);
   const newContactMessage = newContact === null ? null : newContactProblem(newContact);

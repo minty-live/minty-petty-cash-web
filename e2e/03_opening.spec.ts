@@ -5,7 +5,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 import { companyRef } from "./companyRef";
-import { landingAddress, mintModuleToken } from "./helpers";
+import { expectNoHorizontalScroll, landingAddress, mintModuleToken } from "./helpers";
 
 const ENTITY = "3d65f186-5ba1-4bf7-a1b0-cc64a113eb5c";
 const NAME = "E2E Petty Cash Shop";
@@ -196,11 +196,28 @@ test("unsaved changes hold the stepper back", async ({ page }) => {
     }),
   );
   await page.getByRole("textbox", { name: "Addition to Cash Drawer" }).fill("5");
+  // owner, 2026-11-17 (Figma 515:597, B): every exit asks in the page, never Flask's toast
   await page.getByRole("link", { name: "Sales, next" }).click();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
   await expect(
     toast(page, "You have unsaved changes. Please save your changes first."),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+  await leave.getByRole("button", { name: "Go Back" }).click();
+  await expect(leave).toHaveCount(0);
   await expect(page.getByRole("heading", { name: "Opening" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Addition to Cash Drawer" })).toHaveValue(
+    /^5(.00)?$/,
+  );
+  // the header's Back asks too
+  await page.getByRole("link", { name: /^Back/ }).first().click();
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Go Back" }).click();
+  // Discard changes goes on to the step clicked
+  await page.getByRole("link", { name: "Sales, next" }).click();
+  await leave.getByRole("button", { name: "Discard changes" }).click();
+  await expect(page).toHaveURL(/\/reports\/new\/sale\?/);
 });
 
 test("Save & Exit goes home", async ({ page }) => {

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useStepLeave } from "@/components/report/StepLeave";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { AddExpenseCard } from "@/components/report/AddExpenseCard";
 import {
@@ -126,16 +127,11 @@ function ExpensesForm({
   const [editing, setEditing] = useState<ExpenseLine | null>(null);
   // one card at a time: Add New Expense or Edit Expense
   const cardOpen = adding || editing !== null;
+  // the open card holds input not saved yet (AddExpenseCard's onDirty)
+  const [cardDirty, setCardDirty] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ExpenseLine | null>(null);
   const [deleting, setDeleting] = useState<ExpenseLine | null>(null);
-
-  function onStepClick(event: MouseEvent<HTMLAnchorElement>) {
-    if (cardOpen) {
-      event.preventDefault();
-      toast(UNSAVED, "warning");
-    }
-  }
 
   async function save(action: "next" | "exit") {
     setBusy("Saving...");
@@ -187,8 +183,12 @@ function ExpensesForm({
     setEditing(line);
   }
 
+  // "Leave without saving?" while the open card holds input (owner, 2026-11-17)
+  const leave = useStepLeave(cardOpen && cardDirty);
+
   const overlays = (
     <>
+      {leave}
       {viewing ? (
         <ExpenseDetailsModal
           line={viewing}
@@ -219,7 +219,6 @@ function ExpensesForm({
           draft={progress}
           page="expenses"
           stepHref={(step) => stepHref(entityId, entityName, step, day)}
-          onStepClick={onStepClick}
         />
       }
       overlays={overlays}
@@ -298,6 +297,7 @@ function ExpensesForm({
             onCancel={() => setAdding(false)}
             setBusy={setBusy}
             onNoDraft={(sentence) => backToOpening(sentence, day)}
+            onDirty={setCardDirty}
           />
         ) : null}
         {editing ? (
@@ -321,6 +321,7 @@ function ExpensesForm({
             onCancel={() => setEditing(null)}
             setBusy={setBusy}
             onNoDraft={(sentence) => backToOpening(sentence, day)}
+            onDirty={setCardDirty}
           />
         ) : null}
       </div>

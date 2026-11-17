@@ -195,7 +195,8 @@ This is Flask's `report/opening.html`, at Flask's own address for it. It is buil
 What it keeps from Flask:
 
 - **The report header:** the "14 OCT" date pill, the initials and the Draft badge.
-- **The stepper.** The page is the current step; links follow the draft, and unsaved changes hold them back with Flask's toast.
+- **The stepper.** The page is the current step; links follow the draft.
+- **Unsaved changes (owner, 2026-11-17; Figma 515:597, B):** on every wizard step (Opening, Sales, Expenses, Bank Deposit, Cash Count), input not saved yet makes every way out - the stepper, the header's Back, the menu's links, the browser's Back - ask "Leave without saving?" in the page (`components/report/StepLeave.tsx` `useStepLeave`, minty-web's `LeaveDialog` over `@minty/shared/leaveGuard`), in place of Flask's stepper-only toast. Go Back stays with the typing; Discard changes goes on. Save & Next and Save & Exit save first and never ask; a reload or a closed tab leaves without asking.
 - **The balances:** the illustration, then Starting Cash Balance, Cash Till Balance and Safebox.
 - **"Addition to Cash Drawer".** Every money field here uses `@minty/shared/amountInput` (owner, 2026-10-26): the commas appear as you type, the caret stays on its digit, and leaving the field pads the places ("1,234.5" → "1,234.50"). A 12th whole digit, a third place or a letter is refused, not cut. `lib/currencyInput.ts` keeps only `parseMoney` (an empty field is 0).
 - **"Withdrawal from:"** with Flask's forms-plugin radios (`.flask-radio`).
@@ -239,7 +240,7 @@ This is Flask's `report/expense.html`, at Flask's own address for it. It is buil
 
 What it keeps from Flask:
 
-- **The report header and the stepper.** While the add card is open, the stepper holds with Flask's "You have an unsaved expense. Please save before navigating."
+- **The report header and the stepper.** While the add or edit card holds input (`AddExpenseCard`'s `onDirty`: anything typed or picked; for a saved line, a change), every way out asks "Leave without saving?" (above); an empty open card holds nothing to lose and lets the page go. Opening a second card while one is open still says Flask's "You have an unsaved expense. Please save before navigating."
 - **"Expenses"**, then one card listing the day's lines as Flask's server-drawn rows: the account's name in bold ("N/A" without one), the supplier, the description, the amount in red, and the bin. "No expenses added yet" when there are none, then "Total Expense" and "+ Add New Expense".
 - **The add card, inline below the list:**
   - "Receipt/Document": the dashed box to click or drop on. A picture shows itself (borderless, 256 x 192). A PDF turns the box green with `"<name>" Uploaded` and "Click to change files". The corner button opens the picked file full screen.
@@ -311,7 +312,7 @@ What it keeps from Flask:
 - **One card:** the cash register, **"Cash Box Balance"** (read-only "Actual Cash Balance", filled from the calculator) with the calculator button, the safebox, **"Safebox Cash Balance"** ("Please enter Balance of the safebox", the money field) and the **"Total Cash Count"** bar (till + safebox).
 - **"Discrepancy Details":** the red "Cash Shortage: HKD…" or green "Cash Surplus: HKD…" alert with "Please review your entries or provide a reason for the discrepancy below.", and the Description box, locked with "No discrepancy — description not required" when there is none. A reason for a difference that is then resolved is dropped, as Flask does.
 - **"Use Calculator":** a row per denomination in the company's order (its label, "X", the count - grouped as it is typed, whole numbers, at most 7 digits - and the row's total), "Total Cash Till Balance" and Save, which copies the counts in. Its backdrop covers the whole window and an outside click closes it.
-- **Save & Next** (to Ending, in this app) and **Save & Exit**; Flask's toasts ("Please enter description", the unsaved-changes one).
+- **Save & Next** (to Ending, in this app) and **Save & Exit**; Flask's toasts ("Please enter description"); unsaved changes ask "Leave without saving?" (above).
 - **"Fix Negative Balance"** when the expected cash is below zero, with Flask's own sentence for this page ("Cash balance cannot be negative, let's go back to") and Opening / Sales / Expenses / Deposit.
 
 Where the app differs (Flask's bugs, and the owner's rules of 2026-10-15):

@@ -667,11 +667,11 @@ test("Edit Expense: a refusal says the server's sentence and keeps the card; Can
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Edit Expense" })).toBeVisible();
 
-  // an open edit card holds the stepper back like the add card
+  // an edit card holding a change asks before the stepper leaves (owner, 2026-11-17)
   await page.getByRole("link", { name: /^Sales/ }).click();
-  await expect(
-    toast(page, "You have an unsaved expense. Please save before navigating."),
-  ).toBeVisible();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Go Back" }).click();
 
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Edit Expense" })).toHaveCount(0);
@@ -680,14 +680,28 @@ test("Edit Expense: a refusal says the server's sentence and keeps the card; Can
   expect(edits).toBe(1);
 });
 
-test("an open add card holds the stepper back with Flask's warning", async ({ page }) => {
+test("an add card holding typing asks before leaving; an empty one doesn't (owner, 2026-11-17)", async ({
+  page,
+}) => {
   await openWith(page, expensesAnswer());
   await page.getByRole("button", { name: "Add New Expense" }).click();
+  await page.getByRole("textbox", { name: "Description" }).fill("Taxi");
   await page.getByRole("link", { name: /^Sales/ }).click();
+  const leave = page.getByRole("dialog", { name: "Leave without saving?" });
+  await expect(leave).toBeVisible();
   await expect(
     toast(page, "You have an unsaved expense. Please save before navigating."),
-  ).toBeVisible();
+  ).toHaveCount(0);
+  await leave.getByRole("button", { name: "Go Back" }).click();
   await expect(page.getByRole("heading", { name: "Add New Expense" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Description" })).toHaveValue("Taxi");
+
+  // nothing typed: the card holds nothing to lose, so the stepper goes at once
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Add New Expense" }).click();
+  await page.getByRole("link", { name: /^Sales/ }).click();
+  await expect(leave).toHaveCount(0);
+  await expect(page).toHaveURL(/\/reports\/new\/sale\?/);
 });
 
 test("Save & Next goes on to Bank Deposit in this app", async ({ page }) => {
