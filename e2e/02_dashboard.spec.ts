@@ -166,7 +166,7 @@ test("a deposit yesterday is confirmed before today's report, and a change is se
   await expect(toast(page, "Please select a confirmation option")).toBeVisible();
 
   await dialog.getByText("No, there was a change in the details").click();
-  await expect(dialog).toContainText("will be reversed in Xero");
+  await expect(dialog).toContainText("will be reversed.");
   await dialog.getByRole("button", { name: "Proceed" }).click();
 
   const amount = page.getByRole("dialog", { name: "Deposit to Bank" });

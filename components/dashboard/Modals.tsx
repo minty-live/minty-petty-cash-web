@@ -103,7 +103,7 @@ function Frame({
 /**
  * Flask's "Before You Start" (#startNewReportModal), exactly: before a report whose previous day put
  * cash in the bank, confirm that deposit - as stated, changed, or none. Changed or none reverses it
- * in Xero, so they are greyed out when the company lacks the accounts for that (the red box says
+ * (in Xero too when that report was published), so they are greyed out when the company lacks the accounts for that (the red box says
  * which) or the person lacks the right.
  */
 export function BeforeYouStartModal({
@@ -252,7 +252,9 @@ export function BeforeYouStartModal({
                   <span className="font-bold">Please Note:</span>
                 </p>
                 <p className="mt-1 text-sm text-flask-danger-ink">
-                  By proceeding, you confirm that stated deposit amount will be reversed in Xero.
+                  {/* no "in Xero" (2026-11-18): a company on its own has none, and the API
+                      reverses it there only when the earlier report was published */}
+                  By proceeding, you confirm that the stated deposit amount will be reversed.
                 </p>
               </div>
             </div>
