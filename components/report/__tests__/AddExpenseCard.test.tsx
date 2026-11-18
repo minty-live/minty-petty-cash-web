@@ -86,6 +86,7 @@ function show(over: Partial<AddExpenseProps> = {}) {
     suppliers: SUPPLIERS,
     accounts: ACCOUNTS,
     canCreateSupplier: true,
+    readerEnabled: true,
     onSupplierCreated: vi.fn(),
     onAdded: vi.fn(),
     onSaved: vi.fn(),
@@ -104,6 +105,11 @@ function show(over: Partial<AddExpenseProps> = {}) {
 
 const png = (name = "taxi.png") => new File(["png"], name, { type: "image/png" });
 const attach = (file: File) => userEvent.upload(screen.getByTestId("expense_files"), file);
+/** Picks a receipt and presses "Read the receipt" (the only way it is read, owner 2026-11-18). */
+async function attachAndRead(file: File) {
+  await attach(file);
+  await userEvent.click(screen.getByRole("button", { name: "Read the receipt" }));
+}
 const amount = () => screen.getByRole("textbox", { name: /Expense Amount/ });
 const description = () => screen.getByRole("textbox", { name: "Description" });
 const supplier = () => screen.getByRole("combobox", { name: /Suppliers/ });
@@ -121,11 +127,50 @@ afterEach(() => resetReaderLatch());
 /** The reader switched off (the API without EXPENSE_AI_ENABLED). */
 const READER_OFF_ANSWER = { suggestions: null, reason: "disabled" };
 
+// Owner, 2026-11-04: a started read that fails says so in one quiet line (it used to say nothing).
+const FAILED = "I couldn't read this receipt. Enter the details yourself.";
+
 describe("the receipt reader in Add New Expense", () => {
-  it("fills the empty fields, rings and marks them, and says so once", async () => {
+  // Owner, 2026-11-18: a receipt is read only when the person presses "Read the receipt".
+  it("picking a receipt reads nothing; the button offers it, and pressing it reads once", async () => {
     const calls = api({ suggestions: SUGGESTIONS, reason: null });
     show();
     await attach(png());
+    const button = screen.getByRole("button", { name: "Read the receipt" });
+    expect(button).toHaveAttribute("type", "button");
+    expect(calls.reads).toHaveLength(0);
+    expect(amount()).toHaveValue("");
+    await userEvent.click(button);
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    expect(calls.reads).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+  });
+
+  it("no receipt, or the reader switched off on the API, shows no button", async () => {
+    api({ suggestions: SUGGESTIONS, reason: null });
+    show({ readerEnabled: false });
+    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+    await attach(png());
+    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+  });
+
+  it("a failed read brings the button back, and pressing it tries again", async () => {
+    const calls = api(
+      { suggestions: null, reason: "timeout" },
+      { suggestions: SUGGESTIONS, reason: null },
+    );
+    show();
+    await attachAndRead(png());
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Read the receipt" }));
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    expect(calls.reads).toHaveLength(2);
+  });
+
+  it("fills the empty fields, rings and marks them, and says so once", async () => {
+    const calls = api({ suggestions: SUGGESTIONS, reason: null });
+    show();
+    await attachAndRead(png());
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(calls.reads).toHaveLength(1);
     expect((calls.reads[0].get("receipt") as File).name).toBe("taxi.png");
@@ -147,7 +192,7 @@ describe("the receipt reader in Add New Expense", () => {
     let answer: (value: unknown) => void = () => undefined;
     api(() => new Promise((resolve) => (answer = resolve)));
     show();
-    await attach(png());
+    await attachAndRead(png());
     expect(await screen.findByText("Reading the receipt…")).toBeInTheDocument();
     await userEvent.type(description(), "Taxi");
     answer({ suggestions: SUGGESTIONS, reason: null });
@@ -160,7 +205,7 @@ describe("the receipt reader in Add New Expense", () => {
   it("Clear empties a suggested field; typing in one makes it the person's", async () => {
     api({ suggestions: SUGGESTIONS, reason: null });
     show();
-    await attach(png());
+    await attachAndRead(png());
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     const clears = screen.getAllByRole("button", {
       name: "Clear the suggested value for this field",
@@ -183,7 +228,7 @@ describe("the receipt reader in Add New Expense", () => {
     api({ suggestions: SUGGESTIONS, reason: null });
     show();
     await userEvent.type(amount(), "45");
-    await attach(png());
+    await attachAndRead(png());
     expect(
       await screen.findByText(/^The receipt reads HKD.48\.80, not HKD.45\.00\.$/),
     ).toBeVisible();
@@ -202,9 +247,9 @@ describe("the receipt reader in Add New Expense", () => {
       },
     );
     show();
-    await attach(png("one.png"));
+    await attachAndRead(png("one.png"));
     await waitFor(() => expect(supplier()).toHaveValue("Wellcome"));
-    await attach(png("two.png"));
+    await attachAndRead(png("two.png"));
     await waitFor(() => expect(amount()).toHaveValue("12.00"));
     expect(calls.reads).toHaveLength(2);
     expect(supplier()).toHaveValue("");
@@ -226,7 +271,7 @@ describe("the receipt reader in Add New Expense", () => {
       reason: null,
     });
     show();
-    await attach(png());
+    await attachAndRead(png());
     expect(
       await screen.findByText('Receipt says "Kwok Transport", which is not in your supplier list.'),
     ).toBeVisible();
@@ -240,9 +285,10 @@ describe("the receipt reader in Add New Expense", () => {
   it("switched off ('disabled'), it says nothing and is not asked again this session", async () => {
     const calls = api({ suggestions: null, reason: "disabled" });
     show();
-    await attach(png("one.png"));
+    await attachAndRead(png("one.png"));
     await waitFor(() => expect(calls.reads).toHaveLength(1));
     await attach(png("two.png"));
+    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
     expect(calls.reads).toHaveLength(1);
     expect(screen.queryByText("Reading the receipt…")).toBeNull();
     expect(amount()).toHaveValue("");
@@ -252,13 +298,10 @@ describe("the receipt reader in Add New Expense", () => {
     ).toBeNull();
   });
 
-  // Owner, 2026-11-04: a started read that fails says so in one quiet line (it used to say nothing).
-  const FAILED = "I couldn't read this receipt. Enter the details yourself.";
-
   it("a failed read says so in one quiet line, and nothing else changes", async () => {
     const calls = api(() => Promise.reject(new Error("500")));
     show();
-    await attach(png());
+    await attachAndRead(png());
     await waitFor(() => expect(calls.reads).toHaveLength(1));
     expect(await screen.findByText(FAILED)).toHaveAttribute("role", "status");
     expect(screen.queryByText("Reading the receipt…")).toBeNull();
@@ -272,9 +315,9 @@ describe("the receipt reader in Add New Expense", () => {
       { suggestions: SUGGESTIONS, reason: null },
     );
     show();
-    await attach(png("one.png"));
+    await attachAndRead(png("one.png"));
     expect(await screen.findByText(FAILED)).toBeInTheDocument();
-    await attach(png("two.png"));
+    await attachAndRead(png("two.png"));
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(screen.queryByText(FAILED)).toBeNull();
     expect(calls.reads).toHaveLength(2);
@@ -286,7 +329,7 @@ describe("the receipt reader in Add New Expense", () => {
       reason: "no_usable_field",
     });
     show();
-    await attach(png());
+    await attachAndRead(png());
     expect(await screen.findByText("The receipt might read HKD 12.00.")).toBeInTheDocument();
     expect(screen.queryByText(FAILED)).toBeNull();
   });
@@ -297,7 +340,7 @@ describe("the receipt reader in Add New Expense", () => {
       reason: "no_usable_field",
     });
     show();
-    await attach(png());
+    await attachAndRead(png());
     expect(await screen.findByText(FAILED)).toBeInTheDocument();
   });
 
@@ -305,7 +348,7 @@ describe("the receipt reader in Add New Expense", () => {
     const calls = api({ suggestions: SUGGESTIONS, reason: null });
     const props = show();
     const original = png();
-    await attach(original);
+    await attachAndRead(original);
     await waitFor(() => expect(account()).toHaveValue("Printing & Stationery"));
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(props.onAdded).toHaveBeenCalled());
@@ -324,7 +367,7 @@ describe("the receipt reader in Add New Expense", () => {
     show();
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(amount()).toHaveAttribute("aria-invalid", "true");
-    await attach(png());
+    await attachAndRead(png());
     answer({ suggestions: SUGGESTIONS, reason: null });
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(amount()).not.toHaveAttribute("aria-invalid");

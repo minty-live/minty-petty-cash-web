@@ -5,7 +5,8 @@
  * (`static/js/expense_ai.js`, Minty `351e942`): the read itself (`POST /reports/expenses/extract`)
  * and the pieces the card draws around its fields - the teal "Reading the receipt…" box under the
  * drop zone, the line under a suggested field with Clear, the grey note offering the receipt's
- * different reading, and (owner, 2026-11-04) one quiet line when a started read fails. The rules
+ * different reading, (owner, 2026-11-04) one quiet line when a started read fails, and (owner,
+ * 2026-11-18) the "Read the receipt" press - a receipt is read only on it, never on picking it. The rules
  * are lib/expenseAi.ts; the read and the pieces are `@minty/shared/reader`, shared with Payment
  * Request's invoice reader, here with this card's words.
  *
@@ -14,6 +15,7 @@
  */
 
 import {
+  ReadButton,
   ReaderNote,
   ReadFailedLine,
   ReadingNotice as SharedReadingNotice,
@@ -25,6 +27,7 @@ import { pettyCashFetch } from "@/lib/apiClient";
 import {
   CLEAR_LABEL,
   READ_FAILED,
+  READ_LABEL,
   READING_DETAIL,
   READING_TITLE,
   RECEIPT_LATCH,
@@ -58,6 +61,11 @@ export function useReceiptReader(onSuggestions: (suggestions: Suggestions) => bo
         onUnauthorized: "reject",
       }),
   });
+}
+
+/** "Read the receipt": the only way a receipt is read (shown once one is picked and the reader is on). */
+export function ReadReceiptButton({ onRead }: { onRead: () => void }) {
+  return <ReadButton label={READ_LABEL} onClick={onRead} />;
 }
 
 /** While the receipt is read: Flask's teal box (QA found 12px grey text was missed; the wait is seconds). */

@@ -16,6 +16,7 @@ import { useToast } from "@/components/flask/Toasts";
 import {
   ReadFailed,
   ReadingNotice,
+  ReadReceiptButton,
   ReceiptNote,
   SUGGESTED_RING,
   SuggestedLine,
@@ -29,6 +30,7 @@ import {
   cleared,
   edited,
   entryState,
+  readerOff,
   usedNote,
   withoutDetectedName,
   showedAnything,
@@ -98,6 +100,8 @@ export type AddExpenseProps = {
   suppliers: Supplier[];
   accounts: Account[];
   canCreateSupplier: boolean;
+  /** The receipt reader is switched on: a picked receipt offers "Read the receipt". */
+  readerEnabled: boolean;
   /** A supplier made here, for the page's list (Flask pushes it onto `allContacts`). */
   onSupplierCreated: (supplier: Supplier) => void;
   onAdded: (line: ExpenseLine, total: number) => void;
@@ -121,8 +125,9 @@ export type AddExpenseProps = {
  * required fields as Flask does (red borders and one toast), then sends the line with its receipt
  * as one multipart `POST /reports/expenses/lines`; the server checks it all again.
  *
- * A picked receipt is also read (components/report/ReceiptReader.tsx, `POST /reports/expenses/extract`):
- * its suggestions fill only empty fields, ringed and marked, and the card never waits for it.
+ * A picked receipt can be read (components/report/ReceiptReader.tsx, `POST /reports/expenses/extract`)
+ * - only when the person presses "Read the receipt", never on picking it (owner, 2026-11-18): its
+ * suggestions fill only empty fields, ringed and marked, and the card never waits for it.
  *
  * With `line` it is "Edit Expense" (owner, 2026-11-16): the same card filled in from a saved draft
  * line, its receipt named in the drop zone. Save sends only what changed as one multipart
@@ -136,6 +141,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
     suppliers,
     accounts,
     canCreateSupplier,
+    readerEnabled,
     onSupplierCreated,
     onAdded,
     line = null,
@@ -186,6 +192,15 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const pickedRef = useRef<Picked | null>(null);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
+  // "Read the receipt" was pressed for this receipt: the button goes, and comes back after a failed read
+  const [readAsked, setReadAsked] = useState(false);
+  // (and never once a `disabled` answer has switched the reader off for the session)
+  const offerRead =
+    readerEnabled &&
+    file !== null &&
+    !reader.reading &&
+    (!readAsked || reader.failed) &&
+    !readerOff();
   // input not saved yet: a saved line's fields changed or a new receipt; a new line's anything typed
   const holdsInput =
     file !== null ||
@@ -411,14 +426,22 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setPicked(next);
           // the old receipt's suggestions go with it; what the person typed stays
           setEntry(withoutSuggestions);
-          if (f) {
-            clearError("file");
-            void reader.read(f);
-          } else reader.cancel();
+          // read only on "Read the receipt" (owner, 2026-11-18)
+          reader.cancel();
+          setReadAsked(false);
+          if (f) clearError("file");
         }}
       >
         {reader.reading ? <ReadingNotice /> : null}
         {reader.failed && !reader.reading ? <ReadFailed /> : null}
+        {offerRead ? (
+          <ReadReceiptButton
+            onRead={() => {
+              setReadAsked(true);
+              void reader.read(file);
+            }}
+          />
+        ) : null}
       </ReceiptDrop>
       <div role="status" aria-live="polite" className="sr-only">
         {entry.announcement}

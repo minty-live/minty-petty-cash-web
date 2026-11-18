@@ -69,6 +69,7 @@ function expensesAnswer(over: Json = {}): Json {
     suppliers: SUPPLIERS,
     accounts: ACCOUNTS,
     permissions: { create_supplier: true },
+    reader: { enabled: true },
     ...over,
   };
 }
@@ -824,6 +825,8 @@ const SUGGESTIONS = {
 
 const attachReceipt = (page: Page, name = "taxi.png") =>
   page.getByTestId("expense_files").setInputFiles({ name, mimeType: "image/png", buffer: PNG });
+/** "Read the receipt": the only way a receipt is read (owner, 2026-11-18). */
+const readButton = (page: Page) => page.getByRole("button", { name: "Read the receipt" });
 
 test("the receipt reader: Flask's reading box, then suggestions in the empty fields, marked - nothing saved until Add", async ({
   page,
@@ -845,6 +848,11 @@ test("the receipt reader: Flask's reading box, then suggestions in the empty fie
   });
   await page.getByRole("button", { name: "Add New Expense" }).click();
   await attachReceipt(page);
+  // picking it reads nothing: the button offers the read
+  await expect(readButton(page)).toBeVisible();
+  expect((await readButton(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(reads).toHaveLength(0);
+  await readButton(page).click();
   const notice = page.getByRole("status").filter({ hasText: "Reading the receipt…" });
   await expect(notice).toBeVisible();
   await expect(notice).toContainText("You can start typing now if you prefer.");
@@ -853,6 +861,7 @@ test("the receipt reader: Flask's reading box, then suggestions in the empty fie
   answer();
   await expect(notice).toHaveCount(0);
   expect(reads).toHaveLength(1);
+  await expect(readButton(page)).toHaveCount(0);
   expect(reads[0]).toContain('name="receipt"; filename="taxi.png"');
 
   const amount = page.getByRole("textbox", { name: /Expense Amount/ });
@@ -914,6 +923,7 @@ test("the reader offers a different reading and an unknown supplier, and changes
   const amount = page.getByRole("textbox", { name: /Expense Amount/ });
   await amount.fill("45");
   await attachReceipt(page);
+  await readButton(page).click();
   await expect(page.getByText(/^The receipt reads HKD.48\.80, not HKD.45\.00\.$/)).toBeVisible();
   await page.getByRole("button", { name: "Use the value from the receipt" }).click();
   await expect(amount).toHaveValue("48.80");
@@ -927,7 +937,24 @@ test("the reader offers a different reading and an unknown supplier, and changes
   expect(created).toBe(0);
 });
 
-test("the reader switched off says nothing and is not asked again", async ({ page }) => {
+test("the reader switched off on the API offers no button and reads nothing", async ({ page }) => {
+  let reads = 0;
+  await openWith(page, expensesAnswer({ reader: { enabled: false } }), {
+    onExtract: async (_req, route) => {
+      reads += 1;
+      await route.fulfill({ json: READER_OFF });
+    },
+  });
+  await page.getByRole("button", { name: "Add New Expense" }).click();
+  await attachReceipt(page);
+  await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+  await expect(readButton(page)).toHaveCount(0);
+  expect(reads).toBe(0);
+});
+
+test("a reader switched off since the page loaded says nothing and is not offered again", async ({
+  page,
+}) => {
   let reads = 0;
   await openWith(page, expensesAnswer(), {
     onExtract: async (_req, route) => {
@@ -937,6 +964,7 @@ test("the reader switched off says nothing and is not asked again", async ({ pag
   });
   await page.getByRole("button", { name: "Add New Expense" }).click();
   await attachReceipt(page, "one.png");
+  await readButton(page).click();
   await expect.poll(() => reads).toBe(1);
   await expect(page.getByText("Reading the receipt…")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
@@ -944,20 +972,26 @@ test("the reader switched off says nothing and is not asked again", async ({ pag
   await expect(
     page.getByText('"two.png" Uploaded').or(page.getByRole("img", { name: "Uploaded receipt" })),
   ).toBeVisible();
+  await expect(readButton(page)).toHaveCount(0);
   expect(reads).toBe(1);
 });
 
 // Owner, 2026-11-04: a started read that fails says so in one quiet line (it used to say nothing).
-test("a reader that fails says so in one quiet line, and Add still works", async ({ page }) => {
+test("a reader that fails says so in one quiet line, offers the press again, and Add still works", async ({
+  page,
+}) => {
   await openWith(page, expensesAnswer(), {
     onExtract: (_req, route) =>
       route.fulfill({ status: 500, json: { error: "Something went wrong on our side." } }),
   });
   await fillAdd(page);
+  await readButton(page).click();
   await expect(page.getByText("Reading the receipt…")).toHaveCount(0);
   await expect(
     page.getByText("I couldn't read this receipt. Enter the details yourself."),
   ).toBeVisible();
+  // the press comes back to try again
+  await expect(readButton(page)).toBeVisible();
   await expect(page.locator("[data-toast-type]")).toHaveCount(0);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(toast(page, "Expense added successfully!")).toBeVisible();

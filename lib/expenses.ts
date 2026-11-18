@@ -34,6 +34,8 @@ export type ExpensesPage = {
   /** The accounts switched on for Petty Cash, in the API's order. */
   accounts: Account[];
   permissions: { create_supplier: boolean };
+  /** Whether "Read the receipt" is offered (`EXPENSE_AI_ENABLED`); absent from an older API = off. */
+  reader?: { enabled: boolean };
 };
 
 /**

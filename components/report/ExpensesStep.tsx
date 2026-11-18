@@ -286,6 +286,7 @@ function ExpensesForm({
             suppliers={suppliers}
             accounts={page.accounts}
             canCreateSupplier={page.permissions.create_supplier}
+            readerEnabled={page.reader?.enabled === true}
             onSupplierCreated={(s) =>
               setSuppliers((all) => (all.some((x) => x.id === s.id) ? all : [...all, s]))
             }
@@ -308,6 +309,7 @@ function ExpensesForm({
             suppliers={suppliers}
             accounts={page.accounts}
             canCreateSupplier={page.permissions.create_supplier}
+            readerEnabled={page.reader?.enabled === true}
             onSupplierCreated={(s) =>
               setSuppliers((all) => (all.some((x) => x.id === s.id) ? all : [...all, s]))
             }
