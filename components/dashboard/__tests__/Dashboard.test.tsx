@@ -92,3 +92,35 @@ describe("the day summary", () => {
     expect(screen.queryByText("Today's report is submitted")).not.toBeInTheDocument();
   });
 });
+
+// Owner, 2026-11-18: the calendar opened on today's month even when the draft Continue Report
+// resumes is in an earlier one; it opens on the draft's day, as Start New Report's catch-up day does.
+describe("the report calendar", () => {
+  const behind = {
+    latest: { ...home({}).latest, date: "2026-10-30", closing_balance: 1000 },
+    published: { "2026-10-30": day(1000) },
+    start_date: "2026-10-30",
+    today_has_report: false,
+    today_is_latest_report: false,
+  };
+
+  it("opens on the month of the draft Continue Report resumes", async () => {
+    show(
+      home({
+        ...behind,
+        draft: { id: "d", current_section: null, completed_sections: [], last_edit_seconds: 60 },
+        draft_date: "2026-10-31",
+      }),
+    );
+
+    expect(await screen.findByText("Continue Report")).toBeInTheDocument();
+    expect(screen.getByText("October 2026")).toBeInTheDocument();
+    expect(screen.queryByText("November 2026")).not.toBeInTheDocument();
+  });
+
+  it("opens on today's month with no draft and nothing to catch up", async () => {
+    show(home({}));
+
+    expect(await screen.findByText("November 2026")).toBeInTheDocument();
+  });
+});

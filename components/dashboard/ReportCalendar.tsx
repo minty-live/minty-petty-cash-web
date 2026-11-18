@@ -48,7 +48,10 @@ export function ReportCalendar({
   selected: string | null;
   onPick: (day: string) => void;
 }) {
-  const [shown, setShown] = useState(() => monthOf(selected ?? home.server_today));
+  // Opens on the picked day, else the draft Continue Report resumes (owner, 2026-11-18), else today.
+  const [shown, setShown] = useState(() =>
+    monthOf(selected ?? (home.draft ? home.draft_date : null) ?? home.server_today),
+  );
   const grid = monthGrid(shown.year, shown.month);
 
   return (
