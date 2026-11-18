@@ -201,7 +201,7 @@ function DepositForm({
           <FixStepButton
             label="Expenses"
             note={fixNote("Cash out", page.expenses, code)}
-            noteClass="text-flask-red"
+            noteClass="text-flask-error"
             onClick={() => fix("expenses")}
           />
         </FixNegativeBalanceModal>
@@ -283,7 +283,7 @@ function DepositForm({
                     300,
                   );
                 }}
-                className={`w-full cursor-pointer rounded-flask-2xl border bg-flask-white py-3 pl-12 pr-3 text-flask-black focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal ${
+                className={`w-full cursor-pointer rounded-flask-2xl border bg-flask-white py-3 pl-12 pr-3 text-flask-black focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
                   problem ? "border-flask-red-500" : "border-flask-gray-300"
                 }`}
               />

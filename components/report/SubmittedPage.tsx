@@ -213,7 +213,7 @@ function Submitted({
           type="button"
           onClick={toDashboard}
           disabled={busy !== null}
-          className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80"
+          className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
         >
           <span>Back to Dashboard</span>
           <svg
@@ -235,11 +235,11 @@ function Submitted({
           type="button"
           onClick={nextDay}
           disabled={busy !== null}
-          className="group flex w-full items-center justify-center gap-4 rounded-flask-xl border-2 border-flask-teal bg-flask-white px-4 py-3 font-medium shadow-flask-md transition-colors hover:bg-flask-teal/10"
+          className="group flex w-full items-center justify-center gap-4 rounded-flask-xl border-2 border-flask-secondary-edge bg-flask-white px-4 py-3 font-medium shadow-flask-md transition-colors hover:bg-flask-teal-soft"
         >
-          <span className="text-flask-teal">Continue to next day report</span>
+          <span className="text-flask-secondary-ink">Continue to next day report</span>
           <svg
-            className="size-6 text-flask-teal transition-transform duration-300 group-hover:scale-[1.2]"
+            className="size-6 text-flask-secondary-ink transition-transform duration-300 group-hover:scale-[1.2]"
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
             viewBox="0 0 24 24"

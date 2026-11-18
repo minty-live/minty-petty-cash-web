@@ -36,10 +36,13 @@ describe("the menu's links", () => {
     expect("profile" in sidebarHost.links).toBe(false);
   });
 
-  it("marks nothing current: no menu item is this app's own page since Settings moved (2026-11-10)", () => {
+  it("marks Dashboard and Reports current on their own pages (owner, 2026-11-18), Settings never", () => {
+    expect(sidebarHost.currentOf(HOME)).toBe("dashboard");
+    expect(sidebarHost.currentOf(`${HOME}/`)).toBe("dashboard");
+    expect(sidebarHost.currentOf(`${HOME}/reports`)).toBe("reports");
+    expect(sidebarHost.currentOf(`${HOME}/reports/new/opening`)).toBe("reports");
     expect(sidebarHost.currentOf("/entity/360812e1/olive-and-vine/settings/petty-cash")).toBeNull();
     expect(sidebarHost.currentOf(`${HOME}/settings`)).toBeNull();
-    expect(sidebarHost.currentOf(HOME)).toBeNull();
   });
 });
 

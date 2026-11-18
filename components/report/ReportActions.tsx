@@ -37,7 +37,7 @@ export function ShareButton({ onClick }: { onClick: () => void }) {
         type="button"
         onClick={onClick}
         aria-label="Share"
-        className="flex h-12 w-12 items-center justify-center rounded-full bg-flask-slate-100 transition duration-300 hover:-translate-y-0.5 hover:shadow-flask-lift focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-flask-teal sm:h-16 sm:w-16"
+        className="flex h-12 w-12 items-center justify-center rounded-full bg-flask-slate-100 transition duration-300 hover:-translate-y-0.5 hover:shadow-flask-lift focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-flask-focus sm:h-16 sm:w-16"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -309,7 +309,7 @@ export function ShareModal({ url, onClose }: { url: string | null; onClose: () =
             type="button"
             onClick={() => void copy()}
             disabled={!url}
-            className="whitespace-nowrap rounded-flask-lg bg-flask-teal px-4 py-2 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+            className="whitespace-nowrap rounded-flask-lg bg-flask-teal px-4 py-2 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
           >
             Copy
           </button>
@@ -325,7 +325,7 @@ export function ShareModal({ url, onClose }: { url: string | null; onClose: () =
         <button
           type="button"
           onClick={onClose}
-          className="rounded-flask-lg border-2 border-flask-gray-300 px-4 py-2 font-medium text-flask-gray-700 transition-colors hover:bg-flask-gray-50"
+          className="rounded-flask-lg border-2 border-flask-gray-300 px-4 py-2 font-medium text-flask-gray-700 transition-colors hover:bg-flask-hover"
         >
           Close
         </button>

@@ -140,7 +140,7 @@ describe("My Profile in Petty Cash", () => {
       </ToastProvider>,
     );
     // minty-web has no profile page (owner, 2026-11-03): the fallback is the entity list
-    const link = await screen.findByRole("link", { name: "Select Entity" });
+    const link = await screen.findByRole("link", { name: "Select Company" });
     await waitFor(() => expect(link).toHaveAttribute("href"));
     expect(new URL(link.getAttribute("href") ?? "").searchParams.get("next")).toBe("/entities");
     expect(screen.queryByRole("link", { name: /My Profile/ })).toBeNull();

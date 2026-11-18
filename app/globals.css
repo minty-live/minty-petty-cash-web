@@ -23,8 +23,8 @@
 /* @minty/shared is pinned at v0.4 (the owner, 2026-10-19: every app on the latest sidebar). Only
    the menu takes Part 13's look; every page keeps Flask's through ./styles/flask-theme.css. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: var(--color-surface-page);
+  --foreground: var(--color-text-primary);
 }
 
 html {

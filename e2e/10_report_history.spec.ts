@@ -262,6 +262,17 @@ test("the header, the date filter and the list: each day, its figures, badge, ti
   await expect(failed.getByText("SAT", { exact: true })).toBeVisible();
   await expect(failed.getByText("HKD 1,234,567.50")).toBeVisible();
   await expect(failed.getByText("Publish failed", { exact: true })).toBeVisible();
+  // each badge in its tone (Part 13 status roles, owner 2026-11-18)
+  for (const [row, label, tone] of [
+    [latest, "Submitted", "info"],
+    [published, "Published", "success"],
+    [failed, "Publish failed", "danger"],
+  ] as const) {
+    await expect(row.getByText(label, { exact: true })).toHaveClass(
+      new RegExp(`text-status-${tone}-ink`),
+    );
+    await expect(row.locator(`.bg-status-${tone}-bg`)).toHaveCount(1);
+  }
   await expect(page.getByText("No reports found")).toHaveCount(0);
   await expect(page.getByRole("navigation", { name: "Pages" })).toHaveCount(0);
   await expectNoHorizontalScroll(page);

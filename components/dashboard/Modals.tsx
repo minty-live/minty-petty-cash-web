@@ -14,9 +14,9 @@ import { formatMoney } from "@/lib/money";
 export type Confirmation = "yes" | "change" | "no";
 
 const BACK_BUTTON =
-  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-3 font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft disabled:cursor-not-allowed disabled:opacity-50";
 const PROCEED_BUTTON =
-  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80 disabled:cursor-not-allowed disabled:opacity-70";
+  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:cursor-not-allowed disabled:opacity-70";
 
 const CLOSE_ICON = (
   <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -76,7 +76,7 @@ function Frame({
   }, [onClose]);
   return (
     <div
-      className={`absolute inset-0 ${z} flex items-center justify-center bg-flask-black/50 p-4`}
+      className={`absolute inset-0 ${z} flex items-center justify-center bg-flask-scrim p-4`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onBackdrop?.();
       }}
@@ -348,7 +348,7 @@ export function DepositModal({
               onKeyDown={(e) => {
                 if (e.key === "Enter") proceed();
               }}
-              className={`w-full rounded-flask-2xl border bg-flask-white py-3 pl-12 pr-3 text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal ${
+              className={`w-full rounded-flask-2xl border bg-flask-white py-3 pl-12 pr-3 text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
                 emptyRefused ? "border-flask-red-500" : "border-flask-gray-300"
               }`}
             />

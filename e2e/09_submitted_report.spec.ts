@@ -437,7 +437,7 @@ test("View: the header, the summary from the report, and Share, Delete, Edit Rep
   const history = card(page, "Sales History");
   await expect(history).toBeVisible();
   await expect(history.locator("rect")).toHaveCount(30);
-  await expect(history.locator("rect.fill-flask-red")).toHaveCount(1);
+  await expect(history.locator("rect.fill-flask-chart-day")).toHaveCount(1);
 
   const expenses = card(page, "Total Expenses");
   await expect(
@@ -456,10 +456,14 @@ test("View: the header, the summary from the report, and Share, Delete, Edit Rep
   await expectNoHorizontalScroll(page);
 });
 
-for (const [badge, over] of [
-  ["Submitted", {}],
-  ["Published", { xero_integrated: true, publishing_status: "completed", was_published: true }],
-  ["Publish failed", { publishing_status: "failed" }],
+for (const [badge, over, tone] of [
+  ["Submitted", {}, "info"],
+  [
+    "Published",
+    { xero_integrated: true, publishing_status: "completed", was_published: true },
+    "success",
+  ],
+  ["Publish failed", { publishing_status: "failed" }, "danger"],
 ] as const) {
   test(`View: the header's date, initials and "${badge}" clear the back arrow and the person's initials`, async ({
     page,
@@ -473,6 +477,10 @@ for (const [badge, over] of [
     const back = await box(page.getByRole("link", { name: "Back" }));
     const profile = await box(page.getByRole("button", { name: "My Profile" }));
     const date = await box(page.locator("span").filter({ hasText: /^13 OCT$/ }));
+    // the pill's tone (Part 13 status roles, owner 2026-11-18)
+    await expect(page.getByText(badge, { exact: true })).toHaveClass(
+      new RegExp(`bg-status-${tone}-bg.*text-status-${tone}-ink`),
+    );
     const pill = await box(page.getByText(badge, { exact: true }));
     expect(date.x).toBeGreaterThanOrEqual(back.x + back.width);
     expect(pill.x + pill.width).toBeLessThanOrEqual(profile.x);

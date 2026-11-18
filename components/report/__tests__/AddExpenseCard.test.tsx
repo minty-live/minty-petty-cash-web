@@ -180,7 +180,7 @@ describe("the receipt reader in Add New Expense", () => {
     expect(account()).toHaveValue("Printing & Stationery");
     expect(amount()).toHaveAccessibleDescription("Amount suggested");
     expect(account()).toHaveAccessibleDescription("Account code suggested — please check");
-    expect(amount()).toHaveClass("ring-[#54D3DA]");
+    expect(amount()).toHaveClass("ring-border-selected");
     expect(
       screen.getByText(
         "Suggestions from the receipt filled 4 fields: amount, description, supplier, account. Please check them before adding.",
@@ -214,7 +214,7 @@ describe("the receipt reader in Add New Expense", () => {
     await userEvent.click(clears[0]);
     expect(amount()).toHaveValue("");
     expect(amount()).toHaveFocus();
-    expect(amount()).not.toHaveClass("ring-[#54D3DA]");
+    expect(amount()).not.toHaveClass("ring-border-selected");
 
     await userEvent.type(description(), "!");
     expect(description()).toHaveValue("Copy paper!");

@@ -17,15 +17,17 @@ const CELL =
 
 /** Flask's `createCalendarDay` classes, by state. */
 const LOOK: Record<DayState, string> = {
-  today: "cursor-pointer bg-flask-green font-medium text-flask-white hover:bg-flask-green/80",
+  today:
+    "cursor-pointer bg-flask-cal-today font-medium text-flask-white hover:bg-flask-cal-today/80",
   submitted:
-    "cursor-pointer bg-flask-submitted font-medium text-flask-gray-500 hover:bg-flask-submitted/80",
-  missing: "cursor-pointer bg-flask-red font-medium text-flask-white hover:bg-flask-red/80",
-  open: "cursor-pointer text-flask-gray-500 hover:bg-flask-gray-50",
+    "cursor-pointer bg-flask-cal-submitted font-medium text-flask-gray-500 hover:bg-flask-cal-submitted/80",
+  missing:
+    "cursor-pointer bg-flask-cal-missing font-medium text-flask-white hover:bg-flask-cal-missing/80",
+  open: "cursor-pointer text-flask-gray-500 hover:bg-flask-hover",
   idle: "text-flask-gray-400",
 };
 const PICKED =
-  "cursor-pointer border-2 border-flask-teal bg-flask-teal/20 font-medium text-flask-teal hover:bg-flask-teal/30";
+  "cursor-pointer border-2 border-flask-selected-edge bg-flask-teal-soft font-medium text-flask-link hover:bg-flask-hover";
 const SAY: Record<DayState, string> = {
   today: "today",
   submitted: "submitted",
@@ -133,7 +135,7 @@ export function ReportCalendar({
             const number = Number(iso.slice(8));
             if (!inMonth) {
               return (
-                <div key={iso} aria-hidden="true" className={`${CELL} text-flask-gray-300`}>
+                <div key={iso} aria-hidden="true" className={`${CELL} text-flask-disabled`}>
                   {number}
                 </div>
               );
@@ -161,15 +163,15 @@ export function ReportCalendar({
         <div className="rounded-flask-lg bg-flask-gray-50 px-4 py-3">
           <div className="flex flex-wrap justify-center gap-2 text-xs sm:gap-4">
             <div className="flex items-center gap-1 sm:gap-2">
-              <div className="h-3 w-3 rounded-full bg-flask-submitted sm:h-4 sm:w-4" />
+              <div className="h-3 w-3 rounded-full bg-flask-cal-submitted sm:h-4 sm:w-4" />
               <span className="text-flask-gray-700">Submitted</span>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <div className="h-3 w-3 rounded-full bg-flask-red sm:h-4 sm:w-4" />
+              <div className="h-3 w-3 rounded-full bg-flask-cal-missing sm:h-4 sm:w-4" />
               <span className="text-flask-gray-700">Not Submitted</span>
             </div>
             <div className="flex items-center gap-1 sm:gap-2">
-              <div className="h-3 w-3 rounded-full bg-flask-green sm:h-4 sm:w-4" />
+              <div className="h-3 w-3 rounded-full bg-flask-cal-today sm:h-4 sm:w-4" />
               <span className="text-flask-gray-700">Today</span>
             </div>
           </div>

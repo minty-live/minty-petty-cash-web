@@ -159,10 +159,10 @@ export function RangeCalendar({
                         ? "rounded-l-none rounded-r-[50px]"
                         : "rounded-[150px] sm:rounded-[10px]";
                 const look = ends
-                  ? "border-flask-teal bg-flask-teal text-flask-white hover:border-flask-teal-hover hover:bg-flask-teal-hover"
+                  ? "border-flask-teal bg-flask-teal text-flask-white hover:border-flask-teal-hover hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
                   : between
                     ? "border-flask-range bg-flask-range text-flask-range-ink shadow-[-5px_0_0_var(--color-flask-range),5px_0_0_var(--color-flask-range)]"
-                    : `${iso === today ? "border-flask-teal" : "border-transparent"} text-flask-calendar-ink hover:bg-flask-day-hover`;
+                    : `${iso === today ? "border-flask-selected-edge" : "border-transparent"} text-flask-calendar-ink hover:bg-flask-day-hover`;
                 return (
                   <button
                     key={iso}
@@ -184,14 +184,14 @@ export function RangeCalendar({
         <button
           type="button"
           onClick={onClear}
-          className="min-h-[44px] rounded-[10px] border border-flask-gray-200 bg-transparent px-[18px] py-2.5 text-sm font-semibold text-flask-gray-500 transition-colors hover:bg-flask-gray-100 hover:text-flask-gray-700 sm:min-h-0 sm:px-4 sm:py-2"
+          className="min-h-[44px] rounded-[10px] border border-flask-gray-200 bg-transparent px-[18px] py-2.5 text-sm font-semibold text-flask-gray-500 transition-colors hover:bg-flask-hover hover:text-flask-gray-700 sm:min-h-0 sm:px-4 sm:py-2"
         >
           Clear
         </button>
         <button
           type="button"
           onClick={onSearch}
-          className="min-h-[44px] rounded-[10px] bg-flask-teal px-[18px] py-2.5 text-sm font-semibold text-flask-white transition-colors hover:bg-flask-teal-hover sm:min-h-0 sm:px-5 sm:py-2"
+          className="min-h-[44px] rounded-[10px] bg-flask-teal px-[18px] py-2.5 text-sm font-semibold text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed sm:min-h-0 sm:px-5 sm:py-2"
         >
           Search Report
         </button>

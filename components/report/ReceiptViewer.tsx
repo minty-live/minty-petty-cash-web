@@ -70,7 +70,7 @@ export function ReceiptViewer({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-flask-black/50 p-2 sm:p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center bg-flask-scrim p-2 sm:p-4"
       onClick={(e) => {
         // a portal still bubbles through React's tree: keep the click from whatever drew the viewer
         e.stopPropagation();
@@ -99,7 +99,7 @@ export function ReceiptViewer({
             type="button"
             autoFocus
             onClick={onClose}
-            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+            className="flex min-h-[44px] flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
           >
             Close
           </button>

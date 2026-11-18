@@ -307,13 +307,13 @@ function CashCountForm({
           <FixStepButton
             label="Expenses"
             note={fixNote("Cash out", page.expenses, code)}
-            noteClass="text-flask-red"
+            noteClass="text-flask-error"
             onClick={() => fix("expenses")}
           />
           <FixStepButton
             label="Deposit"
             note={fixNote("Cash out", page.bank_deposit, code)}
-            noteClass="text-flask-red"
+            noteClass="text-flask-error"
             onClick={() => fix("deposit")}
           />
         </FixNegativeBalanceModal>
@@ -392,7 +392,7 @@ function CashCountForm({
                   title="Calculator"
                   aria-label="Calculator"
                   onClick={() => setCalculator(true)}
-                  className="shrink-0 rounded-flask-xl border border-flask-gray-200 bg-flask-teal p-2 hover:bg-flask-teal/80 focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-flask-teal-ink"
+                  className="shrink-0 rounded-flask-xl border border-flask-gray-200 bg-flask-teal p-2 hover:bg-flask-teal-hover active:bg-flask-teal-pressed focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-flask-focus"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element -- Flask's 27px icon drawn at 32px */}
                   <img src="/img/btn_calculator.webp" alt="" className="h-8 w-8" />
@@ -433,7 +433,7 @@ function CashCountForm({
                       300,
                     );
                   }}
-                  className={`min-w-0 flex-1 cursor-pointer rounded-flask-xl border bg-flask-white px-3 py-3 text-flask-black focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal ${
+                  className={`min-w-0 flex-1 cursor-pointer rounded-flask-xl border bg-flask-white px-3 py-3 text-flask-black focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
                     safeMessage ? "border-flask-red-500" : "border-flask-gray-300"
                   }`}
                 />
@@ -498,7 +498,7 @@ function CashCountForm({
                   300,
                 );
               }}
-              className={`block w-full resize-none rounded-flask-2xl border px-3 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal ${
+              className={`block w-full resize-none rounded-flask-2xl border px-3 py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
                 reasonInvalid ? "border-flask-red-500" : "border-flask-gray-300"
               } ${out ? "cursor-pointer bg-flask-white text-flask-gray-700" : "cursor-not-allowed bg-flask-gray-200 text-flask-gray-500"}`}
             />
@@ -627,7 +627,7 @@ function CalculatorModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-flask-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-flask-scrim p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -656,7 +656,7 @@ function CalculatorModal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="-m-2.5 inline-flex h-11 w-11 items-center justify-center text-flask-gray-500 hover:text-flask-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal"
+              className="-m-2.5 inline-flex h-11 w-11 items-center justify-center text-flask-gray-500 hover:text-flask-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
@@ -708,7 +708,7 @@ function CalculatorModal({
                       aria-invalid={problem ? true : undefined}
                       aria-describedby={problem ? `${id}_message` : undefined}
                       onValue={(next) => setTyped((all) => ({ ...all, [d.id]: next }))}
-                      className={`w-full cursor-pointer rounded-flask-2xl border bg-flask-white py-3 pl-10 pr-3 text-right text-flask-black focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal ${
+                      className={`w-full cursor-pointer rounded-flask-2xl border bg-flask-white py-3 pl-10 pr-3 text-right text-flask-black focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
                         problem ? "border-flask-red-500" : "border-flask-gray-300"
                       }`}
                     />
@@ -748,7 +748,7 @@ function CalculatorModal({
           <div className="flex justify-center">
             <button
               type="submit"
-              className="w-full rounded-flask-xl bg-flask-teal px-4 py-3 text-flask-white hover:bg-flask-teal/80 focus:outline-none focus:ring-2 focus:ring-flask-teal"
+              className="w-full rounded-flask-xl bg-flask-teal px-4 py-3 text-flask-white hover:bg-flask-teal-hover active:bg-flask-teal-pressed focus:outline-none focus:ring-2 focus:ring-flask-focus"
             >
               Save
             </button>

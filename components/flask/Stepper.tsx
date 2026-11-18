@@ -85,7 +85,7 @@ export function Stepper({
             <span
               className={`whitespace-nowrap text-center text-[7.6px] font-medium text-flask-black sm:text-xs ${
                 step.open
-                  ? "cursor-pointer transition-colors duration-200 hover:text-flask-teal"
+                  ? "cursor-pointer transition-colors duration-200 hover:text-flask-link"
                   : "cursor-not-allowed"
               }`}
             >

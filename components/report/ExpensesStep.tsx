@@ -257,7 +257,7 @@ function ExpensesForm({
                 <button
                   type="button"
                   onClick={() => setAdding(true)}
-                  className="group mt-6 flex w-full cursor-pointer items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
+                  className="group mt-6 flex w-full cursor-pointer items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-3 font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft"
                 >
                   <svg
                     className="transition-transform duration-300 ease-in-out group-hover:scale-[1.2]"
@@ -332,7 +332,7 @@ function ExpensesForm({
         type="button"
         disabled={busy !== null}
         onClick={() => void save("next")}
-        className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80 disabled:opacity-70"
+        className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70"
       >
         <span>Save &amp; Next</span>
         <svg
@@ -354,7 +354,7 @@ function ExpensesForm({
           type="button"
           disabled={busy !== null}
           onClick={() => void save("exit")}
-          className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-teal transition-colors hover:text-flask-teal/80"
+          className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-link transition-colors hover:text-flask-link/80"
         >
           <span>Save &amp; Exit</span>
         </button>
@@ -404,7 +404,7 @@ export function ExpenseRow({
           onOpen();
         }
       }}
-      className="-m-3 cursor-pointer rounded-flask-lg p-2 px-3 transition-colors hover:bg-flask-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal"
+      className="-m-3 cursor-pointer rounded-flask-lg p-2 px-3 transition-colors hover:bg-flask-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
@@ -429,7 +429,7 @@ export function ExpenseRow({
                   e.stopPropagation();
                   onEdit();
                 }}
-                className="flask-hover-bounce -m-2 cursor-pointer rounded-full p-2 text-flask-gray-400 hover:text-flask-teal"
+                className="flask-hover-bounce -m-2 cursor-pointer rounded-full p-2 text-flask-gray-400 hover:text-flask-link"
               >
                 {PENCIL}
               </button>
@@ -560,7 +560,7 @@ export function ExpenseDetailsModal({
                         <img
                           src={got.url}
                           alt={receipt.name}
-                          className="pointer-events-none h-64 w-full rounded-flask-lg border border-flask-gray-200 object-cover transition-colors group-hover:border-flask-teal"
+                          className="pointer-events-none h-64 w-full rounded-flask-lg border border-flask-gray-200 object-cover transition-colors group-hover:border-flask-selected-edge"
                         />
                       ) : (
                         <div className="flex h-64 w-full items-center justify-center rounded-flask-lg border border-flask-gray-200 bg-flask-gray-50 px-4 text-center text-sm text-flask-gray-500">
@@ -579,13 +579,13 @@ export function ExpenseDetailsModal({
                       key={receipt.id}
                       type="button"
                       onClick={open}
-                      className="group relative flex h-64 w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-flask-lg border border-flask-gray-200 bg-flask-gray-50 px-4 text-center transition-colors hover:border-flask-teal"
+                      className="group relative flex h-64 w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-flask-lg border border-flask-gray-200 bg-flask-gray-50 px-4 text-center transition-colors hover:border-flask-selected-edge"
                     >
                       <PdfIcon />
                       <span className="w-full truncate text-sm text-flask-gray-700">
                         {receipt.name}
                       </span>
-                      <span className="text-sm font-medium text-flask-teal">
+                      <span className="text-sm font-medium text-flask-link">
                         {got?.failed ? "This PDF can't be previewed here." : "Open"}
                       </span>
                     </button>
@@ -646,7 +646,7 @@ export function ExpenseDetailsModal({
           <button
             type="button"
             onClick={onEdit}
-            className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
+            className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-3 font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft"
           >
             <span>Edit</span>
           </button>
@@ -654,7 +654,7 @@ export function ExpenseDetailsModal({
         <button
           type="button"
           onClick={onClose}
-          className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+          className="flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
         >
           <span>Close</span>
         </button>

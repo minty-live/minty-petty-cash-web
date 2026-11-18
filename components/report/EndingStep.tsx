@@ -246,13 +246,13 @@ function EndingSummary({
           <FixStepButton
             label="Expenses"
             note={fixNote("Cash out", page.expenses.total, code)}
-            noteClass="text-flask-red"
+            noteClass="text-flask-error"
             onClick={() => fix("expenses")}
           />
           <FixStepButton
             label="Deposit"
             note={fixNote("Cash out", page.cash.bank_deposit, code)}
-            noteClass="text-flask-red"
+            noteClass="text-flask-error"
             onClick={() => fix("deposit")}
           />
           <FixStepButton
@@ -300,7 +300,7 @@ function EndingSummary({
           type="button"
           onClick={() => go("cash_count")}
           disabled={finishing}
-          className="group flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-teal transition-colors hover:text-flask-teal/80"
+          className="group flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-link transition-colors hover:text-flask-link/80"
         >
           <svg
             width="14"
@@ -325,7 +325,7 @@ function EndingSummary({
         onClick={() => void finish()}
         disabled={finishing}
         aria-describedby={gate ? "finish_reason" : undefined}
-        className="group flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80"
+        className="group flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
       >
         <svg
           width="14"

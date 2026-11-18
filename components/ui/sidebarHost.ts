@@ -64,7 +64,12 @@ export const sidebarHost: SidebarHost = {
   usePathname: () => usePathname() ?? "",
 
   /** No menu item is this app's own page: Settings is the hub's tab since 2026-11-10 (owner). */
-  currentOf: () => null,
+  /** The menu's Dashboard and Reports rows highlight on their own pages (owner, 2026-11-18). */
+  currentOf: (pathname) => {
+    if (/^\/entity\/[^/]+\/[^/]+\/petty-cash\/reports(\/|$)/.test(pathname)) return "reports";
+    if (/^\/entity\/[^/]+\/[^/]+\/petty-cash\/?$/.test(pathname)) return "dashboard";
+    return null;
+  },
 
   /** `body`, because this app scrolls the document, as minty-web does. */
   lockScroll: () => {

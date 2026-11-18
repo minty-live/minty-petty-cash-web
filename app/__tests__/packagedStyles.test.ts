@@ -48,7 +48,12 @@ describe("the stylesheet", () => {
   });
 
   it("emits Flask's palette and Tailwind v3 sizes, and the utilities the pages bind to", () => {
-    expect(compiled).toMatch(/--color-flask-teal:\s*#54d3da/i);
+    // the flask-* colours are aliases of the shared Part 13 roles (owner, 2026-11-18)
+    expect(compiled).toMatch(/--color-flask-teal:\s*var\(--color-action-primary\)/);
+    expect(compiled).toMatch(/--color-action-primary:\s*var\(--minty-main-action\)/);
+    expect(compiled).toMatch(/--minty-main-action:\s*#4fc7c7/i);
+    expect(compiled).toMatch(/--color-flask-link:\s*var\(--color-text-link\)/);
+    expect(compiled).toMatch(/--color-flask-focus:\s*var\(--color-border-focus\)/);
     expect(compiled).toMatch(/--radius-flask-lg:\s*0\.5rem/);
     expect(compiled).toMatch(/\.bg-flask-teal\s*\{/);
     expect(compiled).toMatch(/\.rounded-flask-xl\s*\{/);
@@ -57,7 +62,7 @@ describe("the stylesheet", () => {
 
   it("takes Part 13's tokens for the menu, with nothing local declaring their names", () => {
     expect(compiled).toMatch(/--color-surface-card:\s*var\(--minty-neutral-0\)/);
-    expect(compiled).toMatch(/--color-accent-avatar-bg:\s*var\(--minty-yellow-50\)/);
+    expect(compiled).toMatch(/--color-accent-avatar-bg:\s*var\(--minty-main-avatar-bg\)/);
     expect(compiled).toMatch(/--radius-lg:\s*12px/);
     expect(compiled).toMatch(/--text-title-l:\s*20px/);
     // A local --radius-sm..xl, --text-* or one of tokens.css's colour groups would win invisibly

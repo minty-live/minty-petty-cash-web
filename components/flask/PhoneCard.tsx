@@ -42,7 +42,7 @@ function HeaderButtons() {
     </span>
   );
   const BADGE =
-    "relative inline-flex shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal/50";
+    "relative inline-flex shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus";
   return (
     <div className="flex items-center gap-2">
       {sidebar?.canOpenProfile ? (
@@ -64,7 +64,7 @@ function HeaderButtons() {
         <a
           href={mounted ? sidebarHost.links.entities() : undefined}
           className={BADGE}
-          aria-label="Select Entity"
+          aria-label="Select Company"
           title={viewer?.name ?? ""}
         >
           {initials}
@@ -77,7 +77,7 @@ function HeaderButtons() {
         aria-label="Open navigation menu"
         aria-expanded={sidebar ? sidebar.open && sidebar.view === "menu" : false}
         aria-controls={sidebar?.panelId}
-        className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-flask-md text-flask-menu transition-colors hover:bg-flask-menu/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-flask-menu"
+        className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-flask-md text-flask-menu transition-colors hover:bg-flask-menu/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-flask-focus"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"

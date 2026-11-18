@@ -39,7 +39,7 @@ function LandingContent() {
           <button
             type="button"
             onClick={() => backThroughHandoff(readLanding(searchParams, APP_HOME))}
-            className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-flask-xl bg-flask-teal px-5 text-sm font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+            className="inline-flex min-h-11 cursor-pointer items-center justify-center rounded-flask-xl bg-flask-teal px-5 text-sm font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
           >
             Continue
           </button>

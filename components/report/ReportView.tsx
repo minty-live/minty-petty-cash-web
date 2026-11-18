@@ -43,7 +43,7 @@ const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then r
 
 /** Flask's big action buttons under the summary (`w-full mt-6`, the icon growing on hover). */
 const ACTION =
-  "group mt-6 flex w-full items-center justify-center gap-2 rounded-flask-xl px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors";
+  "group mt-6 flex w-full items-center justify-center gap-2 rounded-flask-xl px-4 py-3 font-medium shadow-flask-md transition-colors";
 const ICON_GROW = "transition-transform duration-300 group-hover:scale-[1.2]";
 
 /**
@@ -287,7 +287,7 @@ function ReportViewBody({
             })
           }
           disabled={busy !== null}
-          className={`${ACTION} bg-flask-red hover:bg-flask-red/80`}
+          className={`${ACTION} bg-flask-red text-flask-white hover:bg-flask-red-hover`}
         >
           <svg
             width="16"
@@ -312,7 +312,7 @@ function ReportViewBody({
           type="button"
           onClick={() => edit(report.report_id, report.was_published)}
           disabled={busy !== null}
-          className={`${ACTION} bg-flask-olive hover:bg-flask-olive/80`}
+          className={`${ACTION} border-2 border-flask-secondary-edge bg-flask-white text-flask-secondary-ink hover:bg-flask-teal-soft`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -353,7 +353,7 @@ function ReportViewBody({
         <button
           type="button"
           onClick={() => goBack(historyHref(entityId, entityName), { skip: REPORT_STEP_VIEW_SKIP })}
-          className={`${ACTION} bg-flask-teal hover:bg-flask-teal/80`}
+          className={`${ACTION} bg-flask-teal text-flask-white hover:bg-flask-teal-hover active:bg-flask-teal-pressed`}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

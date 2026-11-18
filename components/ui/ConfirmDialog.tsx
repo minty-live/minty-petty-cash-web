@@ -41,8 +41,8 @@ const CONFIRM_TONE: Record<ConfirmTone, string> = {
 export type BackTone = "grey" | "teal";
 
 const BACK_TONE: Record<BackTone, string> = {
-  grey: "border-flask-dialog-edge/30 font-bold text-flask-black hover:bg-flask-gray-50",
-  teal: "border-flask-dialog-teal-edge text-flask-dialog-teal hover:bg-flask-dialog-teal-wash",
+  grey: "border-flask-dialog-edge font-bold text-flask-black hover:bg-flask-hover",
+  teal: "border-flask-dialog-teal-edge text-flask-secondary-ink hover:bg-flask-dialog-teal-wash",
 };
 
 export function ConfirmDialog({
@@ -115,13 +115,13 @@ export function ConfirmDialog({
           {lead !== undefined ? (
             <div className="mt-4 text-[15px] leading-snug break-words">{lead}</div>
           ) : entityName ? (
-            <p className="mt-4 text-[15px] leading-snug break-words text-flask-dialog-edge">
+            <p className="mt-4 text-[15px] leading-snug break-words text-flask-dialog-body">
               Entity
               <br />
               {/* The COMPANY is coloured, the label above it is not: "Entity" is furniture,
                     the name is the thing the modal is about. (It was one grey for a while -
                     that reading of the design's single text node is superseded.) */}
-              <span className="text-flask-dialog-teal-edge">{entityName}</span>
+              <span className="text-flask-link">{entityName}</span>
             </p>
           ) : null}
         </div>

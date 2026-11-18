@@ -9,33 +9,38 @@ import type { OpeningPage } from "@/lib/opening";
 const BADGE = "shrink-0 whitespace-nowrap rounded-full px-2 py-1 text-xs font-medium sm:px-3";
 
 /**
+ * The report status pills' tones, from @minty/shared's Part 13 status roles (owner, 2026-11-18):
+ * Draft neutral, Submitted info, Published (to Xero) success, Publish failed danger. Report history
+ * draws its badges with the same tones.
+ */
+export const BADGE_TONE = {
+  Published: { bg: "bg-status-success-bg", ink: "text-status-success-ink" },
+  "Publish failed": { bg: "bg-status-danger-bg", ink: "text-status-danger-ink" },
+  Draft: { bg: "bg-status-neutral-bg", ink: "text-status-neutral-ink" },
+  Submitted: { bg: "bg-status-info-bg", ink: "text-status-info-ink" },
+} as const;
+
+function Badge({ label }: { label: keyof typeof BADGE_TONE }) {
+  const tone = BADGE_TONE[label];
+  return <span className={`${BADGE} ${tone.bg} ${tone.ink}`}>{label}</span>;
+}
+
+/**
  * Flask's report header badge (`components/report_draft_header_badge.html`): Published (sent to
  * Xero), Publish failed, Draft (a draft, or a report not started yet), else Submitted.
  */
 export function ReportBadge({ draft }: { draft: OpeningPage["draft"] }) {
-  if (draft?.xero_integrated)
-    return (
-      <span className={`${BADGE} bg-flask-badge-published-bg text-flask-badge-published-ink`}>
-        Published
-      </span>
-    );
-  if (draft?.publishing_status === "failed") {
-    return (
-      <span className={`${BADGE} bg-flask-badge-published-bg text-flask-badge-published-ink`}>
-        Publish failed
-      </span>
-    );
-  }
-  if (!draft || draft.status === "draft")
-    return <span className={`${BADGE} bg-flask-submitted text-flask-badge-draft-ink`}>Draft</span>;
-  return <span className={`${BADGE} bg-flask-red-soft text-flask-red`}>Submitted</span>;
+  if (draft?.xero_integrated) return <Badge label="Published" />;
+  if (draft?.publishing_status === "failed") return <Badge label="Publish failed" />;
+  if (!draft || draft.status === "draft") return <Badge label="Draft" />;
+  return <Badge label="Submitted" />;
 }
 
 /** Flask's `components/loading_overlay.html`: over the phone card while a step saves. */
 export function LoadingOverlay({ text = "Saving..." }: { text?: string }) {
   return (
     <div
-      className="absolute inset-0 z-30 flex items-center justify-center bg-flask-black/30"
+      className="absolute inset-0 z-30 flex items-center justify-center bg-flask-scrim"
       role="status"
     >
       <div className="flex items-center gap-3 rounded-flask-lg bg-flask-white p-4 shadow-flask-lg">
@@ -94,7 +99,7 @@ export function Modal({
   }, [onClose]);
   return (
     <div
-      className="absolute inset-0 z-50 flex items-center justify-center bg-flask-black/50 p-4"
+      className="absolute inset-0 z-50 flex items-center justify-center bg-flask-scrim p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -167,7 +172,7 @@ export function FixNegativeBalanceModal({
       : formatMoney(balance, currencyCode);
   return (
     <div
-      className={`${overWindow ? "fixed" : "absolute"} inset-0 z-50 flex items-center justify-center bg-flask-black/50 p-4`}
+      className={`${overWindow ? "fixed" : "absolute"} inset-0 z-50 flex items-center justify-center bg-flask-scrim p-4`}
     >
       <div
         role="alertdialog"
@@ -210,7 +215,7 @@ export function FixStepButton({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center justify-between rounded-flask-xl border border-flask-teal-soft bg-flask-white px-4 py-3 text-left text-flask-gray-700 transition-colors hover:bg-flask-gray-50"
+      className="group flex w-full items-center justify-between rounded-flask-xl border border-flask-teal-soft bg-flask-white px-4 py-3 text-left text-flask-gray-700 transition-colors hover:bg-flask-hover"
     >
       <span className="flex min-w-0 items-center">
         {label}
@@ -247,7 +252,7 @@ export function SaveButtons({ disabled, onExit }: { disabled: boolean; onExit: (
       <button
         type="submit"
         disabled={disabled}
-        className="group flex min-h-[40px] w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80 disabled:opacity-70"
+        className="group flex min-h-[40px] w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70"
       >
         <span>Save &amp; Next</span>
         <svg
@@ -269,7 +274,7 @@ export function SaveButtons({ disabled, onExit }: { disabled: boolean; onExit: (
           type="button"
           disabled={disabled}
           onClick={onExit}
-          className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-teal transition-colors hover:text-flask-teal/80"
+          className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-link transition-colors hover:text-flask-link/80"
         >
           <span>Save &amp; Exit</span>
         </button>

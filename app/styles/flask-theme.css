@@ -6,153 +6,182 @@
    there (8px in v3), v4's grey is oklch, v4 renamed the shadows. So every value Flask uses is
    declared here ONCE, under `flask-*`, and the ported pages draw only with these - never with a
    raw hex in a class (__tests__/no_raw_colours.test.ts still holds). Values: Tailwind v3.4's
-   defaults and the hexes in templates/entity/entity_dashboard_v2.html. */
+   defaults and the hexes in templates/entity/entity_dashboard_v2.html.
+
+   COLOURS (owner, 2026-11-18): one palette for every Minty app. Each `--color-flask-*` is now an
+   alias of the role it plays in @minty/shared's colors.css (via tokens.css; main's palette), so
+   the class names stay and the values are the shared ones. A token used for two roles got a second
+   one (flask-link, flask-focus, ...). Petty Cash's own colours - sales green, the Report Calendar,
+   the charts, the tooltip marks, the Quick Action tints - are shared roles too (pettycash-*,
+   calendar-*, chart-*, tooltip-*, quick-*): no hex lives in this file. */
 
 @theme {
   /* Tailwind v3 grey + red-500 (Flask's gray-*, red-500) */
-  --color-flask-gray-50: #f9fafb;
-  --color-flask-gray-100: #f3f4f6;
-  --color-flask-gray-200: #e5e7eb;
-  --color-flask-gray-300: #d1d5db;
-  --color-flask-gray-400: #9ca3af;
-  --color-flask-gray-500: #6b7280;
-  --color-flask-gray-600: #4b5563;
-  --color-flask-gray-700: #374151;
-  --color-flask-gray-800: #1f2937;
-  --color-flask-gray-900: #111827;
-  --color-flask-red-500: #ef4444;
-  --color-flask-black: #000000;
-  --color-flask-white: #ffffff;
-  --color-flask-ink: #171717;
+  --color-flask-gray-50: var(--color-surface-sunk);
+  --color-flask-gray-100: var(--color-border-subtle);
+  --color-flask-gray-200: var(--color-border-subtle);
+  --color-flask-gray-300: var(--color-border-input);
+  --color-flask-gray-400: var(--color-text-muted);
+  --color-flask-gray-500: var(--color-text-muted);
+  --color-flask-gray-600: var(--color-text-secondary);
+  --color-flask-gray-700: var(--color-text-secondary);
+  --color-flask-gray-800: var(--color-text-primary);
+  --color-flask-gray-900: var(--color-text-primary);
+  --color-flask-red-500: var(--color-action-danger);
+  --color-flask-black: var(--color-text-primary);
+  --color-flask-white: var(--color-surface-card);
+  --color-flask-ink: var(--color-text-primary);
 
   /* the brand and its states */
-  --color-flask-teal: #54d3da;
-  --color-flask-teal-soft: #caf1f4;
-  --color-flask-teal-ink: #269aa1;
-  --color-flask-teal-pill: #31b6bd;
-  --color-flask-green: #00c896;
-  --color-flask-green-ink: #16a34a;
-  --color-flask-red: #ff6b6b;
-  --color-flask-red-soft: #fff0f0;
-  --color-flask-submitted: #ebeef2;
-  /* the report badges (components/report_draft_header_badge.html) */
-  --color-flask-badge-draft-ink: #546881;
-  --color-flask-badge-published-bg: #e6f2ff;
-  --color-flask-badge-published-ink: #007bff;
-  --color-flask-red-600: #dc2626;
-  --color-flask-header: #474747;
-  --color-flask-menu: #656565;
-  --color-flask-avatar-bg: #ffe6b1;
-  --color-flask-avatar-ink: #6b3a12;
+  --color-flask-teal: var(--color-action-primary);
+  --color-flask-teal-soft: var(--color-state-selected);
+  --color-flask-teal-ink: var(--color-border-focus);
+  --color-flask-teal-pill: var(--color-text-link);
+  /* Sales and money-in green: main's own #00c896 (owner, 2026-11-18). */
+  --color-flask-green: var(--color-pettycash-sales);
+  --color-flask-green-ink: var(--color-status-success-ink);
+  --color-flask-red: var(--color-action-danger);
+  --color-flask-red-soft: var(--color-status-danger-bg);
+  --color-flask-submitted: var(--color-status-neutral-bg);
+  /* the Draft callout (the report pills themselves draw with the status roles, ReportChrome's BADGE_TONE) */
+  --color-flask-badge-draft-ink: var(--color-status-neutral-ink);
+  --color-flask-red-600: var(--color-status-danger-ink);
+  --color-flask-header: var(--color-text-secondary);
+  --color-flask-menu: var(--color-text-secondary);
+  --color-flask-avatar-bg: var(--color-accent-avatar-bg);
+  --color-flask-avatar-ink: var(--color-accent-avatar-ink);
 
   /* notes and warnings */
-  --color-flask-amber-bg: #fff3d4;
-  --color-flask-amber: #fbbf24;
-  --color-flask-amber-edge: #fea81d;
-  --color-flask-amber-ink: #92400e;
-  --color-flask-danger-bg: #fef2f2;
-  --color-flask-danger-edge: #fee2e2;
-  --color-flask-danger: #ef4444;
-  --color-flask-danger-ink: #b91c1c;
-  --color-flask-success-bg: #f0fdf4;
-  --color-flask-success-ink: #166534;
+  --color-flask-amber-bg: var(--color-status-warning-bg);
+  --color-flask-amber: var(--color-status-warning-ink);
+  --color-flask-amber-edge: var(--color-status-warning-ink);
+  --color-flask-amber-ink: var(--color-status-warning-ink);
+  --color-flask-danger-bg: var(--color-status-danger-bg);
+  --color-flask-danger-edge: var(--color-status-danger-bg);
+  --color-flask-danger: var(--color-action-danger);
+  --color-flask-danger-ink: var(--color-status-danger-ink);
+  --color-flask-success-bg: var(--color-status-success-bg);
+  --color-flask-success-ink: var(--color-status-success-ink);
 
   /* the Expenses step (report/expense.html): the uploaded-receipt state, the drag-over state,
      the Expense Details ink, and the link of a receipt no browser draws */
-  --color-flask-upload-ok-bg: #d9f7ef;
-  --color-flask-upload-ok: #00a078;
-  --color-flask-blue-50: #eff6ff;
-  --color-flask-blue-500: #3b82f6;
-  --color-flask-blue-600: #2563eb;
-  --color-flask-blue-800: #1e40af;
-  --color-flask-detail-ink: #0c4a6e;
+  --color-flask-upload-ok-bg: var(--color-status-success-bg);
+  --color-flask-upload-ok: var(--color-status-success-ink);
+  --color-flask-blue-50: var(--color-status-info-bg);
+  --color-flask-blue-500: var(--color-status-info-ink);
+  --color-flask-blue-600: var(--color-text-link);
+  --color-flask-blue-800: var(--color-text-primary);
+  --color-flask-detail-ink: var(--color-status-info-ink);
 
   /* the Cash Count step (report/cash_count.html): the Total Cash Count ink, the shortage heading
      (red-800) and the surplus icon (green-500) */
-  --color-flask-teal-count: #33969c;
-  --color-flask-red-800: #991b1b;
-  --color-flask-green-500: #22c55e;
+  --color-flask-teal-count: var(--color-text-link);
+  --color-flask-red-800: var(--color-status-danger-ink);
+  --color-flask-green-500: var(--color-status-success-ink);
 
   /* the Ending step (report/ending.html with components/bar_chart.html and pie_chart.html): the
-     Sales History bars and their figures (the day itself is flask-red / flask-red-500), and the
+     Sales History bars and their figures (the day itself is flask-chart-day / -day-label, Flask's
+     red and red-500 kept as chart hues), and the
      expense pie's slice colours in Flask's order, "Other expenses" always yellow */
-  --color-flask-chart-bar: #e1f3f5;
-  --color-flask-chart-label: #b8b8b8;
-  --color-flask-pie-1: #278cf4;
-  --color-flask-pie-2: #f1b337;
-  --color-flask-pie-3: #f2822c;
-  --color-flask-pie-4: #b8e467;
-  --color-flask-pie-5: #67e4c0;
-  --color-flask-pie-6: #9f67e4;
-  --color-flask-pie-7: #e4679d;
-  --color-flask-pie-other: #f1db37;
+  --color-flask-chart-bar: var(--color-chart-bar);
+  --color-flask-chart-label: var(--color-chart-label);
+  --color-flask-chart-day: var(--color-chart-day);
+  /* The Report Calendar keeps main's own colours (owner, 2026-11-18): Today green, Not Submitted
+     coral, Submitted pale grey - not the status roles. */
+  --color-flask-cal-today: var(--color-calendar-today);
+  --color-flask-cal-missing: var(--color-calendar-missing);
+  --color-flask-cal-submitted: var(--color-calendar-submitted);
+  --color-flask-chart-day-label: var(--color-chart-day-label);
+  --color-flask-pie-1: var(--color-chart-pie-1);
+  --color-flask-pie-2: var(--color-chart-pie-2);
+  --color-flask-pie-3: var(--color-chart-pie-3);
+  --color-flask-pie-4: var(--color-chart-pie-4);
+  --color-flask-pie-5: var(--color-chart-pie-5);
+  --color-flask-pie-6: var(--color-chart-pie-6);
+  --color-flask-pie-7: var(--color-chart-pie-7);
+  --color-flask-pie-other: var(--color-chart-pie-other);
 
   /* the Submitted page (report/submitted.html) and a submitted report's view (report/ending.html):
      Tailwind v3's slate for the heading, the Export Options button and the Xero button's ring,
      and the olive of the share glyph and Edit Report */
-  --color-flask-slate-100: #f1f5f9;
-  --color-flask-slate-200: #e2e8f0;
-  --color-flask-slate-500: #64748b;
-  --color-flask-slate-700: #334155;
-  --color-flask-slate-800: #1e293b;
-  --color-flask-olive: #567a5c;
+  --color-flask-slate-100: var(--color-surface-sunk);
+  --color-flask-slate-200: var(--color-border-default);
+  --color-flask-slate-500: var(--color-text-muted);
+  --color-flask-slate-700: var(--color-text-secondary);
+  --color-flask-slate-800: var(--color-text-primary);
+  --color-flask-olive: var(--color-text-link);
 
   /* report history (report_history/report_history.html): a weekend's day circle, the failed
      publish tooltip's ticks and crosses (Tailwind v3's green-300/400, red-400), and its
      Flatpickr range calendar - Flatpickr's day ink and arrow hover, the page's own theme over it */
-  --color-flask-weekend: #f1b337;
-  --color-flask-green-300: #86efac;
-  --color-flask-green-400: #4ade80;
-  --color-flask-red-400: #f87171;
-  --color-flask-calendar-ink: #393939;
-  --color-flask-calendar-arrow-hover: #f64747;
-  --color-flask-calendar-rule: #f0f0f0;
-  --color-flask-teal-hover: #3fc3ca;
-  --color-flask-range: #e6fafb;
-  --color-flask-range-ink: #0f766e;
-  --color-flask-day-hover: #f1fbfc;
+  --color-flask-weekend: var(--color-calendar-weekend);
+  --color-flask-green-300: var(--color-tooltip-ok);
+  --color-flask-green-400: var(--color-tooltip-ok-strong);
+  --color-flask-red-400: var(--color-tooltip-bad);
+  --color-flask-calendar-ink: var(--color-text-primary);
+  --color-flask-calendar-arrow-hover: var(--color-text-link);
+  --color-flask-calendar-rule: var(--color-border-subtle);
+  --color-flask-teal-hover: var(--color-action-primary-hover);
+  --color-flask-teal-pressed: var(--color-action-primary-pressed);
+  --color-flask-range: var(--color-state-selected);
+  --color-flask-range-ink: var(--color-text-link);
+  --color-flask-day-hover: var(--color-state-selected);
   --shadow-flask-calendar: 0 8px 24px rgb(0 0 0 / 0.12);
 
   /* Petty Cash Settings (entity/settings_entity.html, static/css/settings_page.css): that page
      wrote minty-web's Tailwind v4 values out by hand, so its greys and reds are v4's, not the
      v3 ones above; the combo's chevron strip, the row menu's inks, the Xero-less notice's red */
-  --color-flask-set-gray-300: #d1d5dc;
-  --color-flask-set-gray-400: #99a1af;
-  --color-flask-set-gray-500: #6a7282;
-  --color-flask-set-gray-600: #4a5565;
-  --color-flask-set-gray-700: #364153;
-  --color-flask-set-gray-800: #1e2939;
-  --color-flask-set-red-500: #fb2c36;
-  --color-flask-set-red-600: #e7000b;
-  --color-flask-set-strip: #ededed;
-  --color-flask-set-dots: #8c949e;
-  --color-flask-set-menu-ink: #16202e;
-  --color-flask-set-menu-off: #a0a8b2;
+  --color-flask-set-gray-300: var(--color-border-input);
+  --color-flask-set-gray-400: var(--color-text-muted);
+  --color-flask-set-gray-500: var(--color-text-muted);
+  --color-flask-set-gray-600: var(--color-text-secondary);
+  --color-flask-set-gray-700: var(--color-text-secondary);
+  --color-flask-set-gray-800: var(--color-text-primary);
+  --color-flask-set-red-500: var(--color-action-danger);
+  --color-flask-set-red-600: var(--color-action-danger-hover);
+  --color-flask-set-strip: var(--color-border-subtle);
+  --color-flask-set-dots: var(--color-text-muted);
+  --color-flask-set-menu-ink: var(--color-text-primary);
+  --color-flask-set-menu-off: var(--color-text-disabled);
   /* its "Xero isn't connected" notice (.pcs-notice-alert) and the notice's link */
-  --color-flask-set-alert-edge: #f3b6ad;
-  --color-flask-set-alert-bg: #fff5f5;
-  --color-flask-set-alert-icon: #d92d20;
-  --color-flask-set-link: #18c4c7;
+  --color-flask-set-alert-edge: var(--color-status-danger-bg);
+  --color-flask-set-alert-bg: var(--color-status-danger-bg);
+  --color-flask-set-alert-icon: var(--color-status-danger-ink);
+  --color-flask-set-link: var(--color-text-link);
   /* minty-web's modal (components/minty_dialog.html, static/css/minty_dialog.css) */
-  --color-flask-dialog-body: #757575;
-  --color-flask-dialog-edge: #737a87;
-  --color-flask-dialog-teal: #4fc7c7;
-  --color-flask-dialog-red: #dc5a5a;
+  --color-flask-dialog-body: var(--color-text-secondary);
+  --color-flask-dialog-edge: var(--color-border-default);
+  --color-flask-dialog-teal: var(--color-action-primary);
+  --color-flask-dialog-red: var(--color-action-danger);
   --shadow-flask-dialog: 0 4px 8px 0 rgb(15 23 42 / 0.08), 0 12px 32px 0 rgb(0 0 0 / 0.1);
   /* minty-web's ConfirmDialog (Figma 04-G / A-11; components/ui/ConfirmDialog.tsx, copied 2026-11-17),
      beside the dialog tokens above */
-  --color-flask-dialog-orange: #ea9713;
-  --color-flask-dialog-teal-edge: #18c4c7;
-  --color-flask-dialog-teal-wash: #f5ffff;
+  --color-flask-dialog-orange: var(--color-status-warning-ink);
+  --color-flask-dialog-teal-edge: var(--color-action-secondary-border);
+  --color-flask-dialog-teal-wash: var(--color-state-selected);
   --shadow-flask-row-menu: 0 2px 8px 0 rgb(0 0 0 / 0.1);
   --shadow-flask-suggest:
     0 0 0 1px rgb(0 0 0 / 0.05), 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 
   /* Quick Actions icons */
-  --color-flask-purple-bg: #f3e8ff;
-  --color-flask-purple: #9333ea;
-  --color-flask-orange-bg: #ffedd5;
-  --color-flask-orange: #ea580c;
+  --color-flask-purple-bg: var(--color-quick-purple-bg);
+  --color-flask-purple: var(--color-quick-purple);
+  --color-flask-orange-bg: var(--color-quick-orange-bg);
+  --color-flask-orange: var(--color-quick-orange);
+
+  /* the second roles of tokens above that drew two things: a link or teal text, the keyboard focus
+     ring, a selected or hovered edge, the outlined (secondary) button, a row's hover, a modal's
+     scrim, an error sentence, the danger button's hover and disabled text */
+  --color-flask-link: var(--color-text-link);
+  --color-flask-focus: var(--color-border-focus);
+  --color-flask-selected-edge: var(--color-border-selected);
+  --color-flask-secondary-edge: var(--color-action-secondary-border);
+  --color-flask-secondary-ink: var(--color-action-secondary-text);
+  --color-flask-hover: var(--color-state-hover);
+  --color-flask-scrim: var(--color-overlay-scrim);
+  --color-flask-error: var(--color-status-danger-ink);
+  --color-flask-red-hover: var(--color-action-danger-hover);
+  --color-flask-disabled: var(--color-text-disabled);
 
   /* Tailwind v3 radii and shadows */
   --radius-flask: 0.25rem;
@@ -195,7 +224,8 @@
 }
 
 /* Flask's radios: Tailwind's forms plugin (`w-4 h-4 text-[#54D3DA] border-gray-300
-   focus:ring-[#54D3DA]`) - a grey-ringed white circle, filled teal with a white dot when checked. */
+   focus:ring-[#54D3DA]`) - a grey-ringed white circle, filled Minty Action with a white dot when
+   checked (the owner's tick/radio override), the focus ring in border-focus. */
 .flask-radio {
   appearance: none;
   padding: 0;
@@ -206,7 +236,7 @@
   flex-shrink: 0;
   width: 1rem;
   height: 1rem;
-  color: var(--color-flask-teal);
+  color: var(--color-action-tick);
   background-color: var(--color-flask-white);
   border: 1px solid var(--color-flask-gray-300);
   border-radius: 100%;
@@ -219,7 +249,7 @@
   outline-offset: 2px;
   box-shadow:
     0 0 0 2px var(--color-flask-white),
-    0 0 0 4px var(--color-flask-teal);
+    0 0 0 4px var(--color-flask-focus);
 }
 .flask-radio:checked {
   border-color: transparent;

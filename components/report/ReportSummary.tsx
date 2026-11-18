@@ -86,7 +86,7 @@ export function ReportSummary({
     <>
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Summary</h2>
-        <span className="text-sm text-flask-gray-300">{code || NO_CURRENCY_NOTE}</span>
+        <span className="text-sm text-flask-disabled">{code || NO_CURRENCY_NOTE}</span>
       </div>
 
       <TotalSales sales={sales} yesterday={yesterday} />
@@ -171,7 +171,7 @@ function ShowMore({
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={controls}
-        className="-my-3 flex min-h-[44px] items-center gap-1 text-sm text-flask-teal transition-colors hover:text-flask-teal/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal"
+        className="-my-3 flex min-h-[44px] items-center gap-1 text-sm text-flask-link transition-colors hover:text-flask-link/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus"
       >
         <span>Show more</span>
         <svg
@@ -180,7 +180,7 @@ function ShowMore({
           viewBox="0 0 24 24"
           strokeWidth="2"
           stroke="currentColor"
-          className={`h-4 w-4 text-flask-teal transition-transform duration-200 ${open ? "" : "rotate-180"}`}
+          className={`h-4 w-4 text-flask-link transition-transform duration-200 ${open ? "" : "rotate-180"}`}
           aria-hidden="true"
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="m4.5 15.75 7.5-7.5 7.5 7.5" />
@@ -383,7 +383,7 @@ function SalesHistory({ history }: { history: ClosePage["sales"]["history"] }) {
                       height={bar.height}
                       rx={chart.radius}
                       ry={chart.radius}
-                      className={bar.highlight ? "fill-flask-red" : "fill-flask-chart-bar"}
+                      className={bar.highlight ? "fill-flask-chart-day" : "fill-flask-chart-bar"}
                     />
                     <text
                       x={mid}
@@ -391,7 +391,9 @@ function SalesHistory({ history }: { history: ClosePage["sales"]["history"] }) {
                       textAnchor="middle"
                       fontSize={chart.font}
                       fontWeight={500}
-                      className={bar.highlight ? "fill-flask-red-500" : "fill-flask-chart-label"}
+                      className={
+                        bar.highlight ? "fill-flask-chart-day-label" : "fill-flask-chart-label"
+                      }
                     >
                       {barValue(bar.value)}
                     </text>

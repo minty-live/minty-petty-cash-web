@@ -8,7 +8,7 @@ import { useToast } from "@/components/flask/Toasts";
 import { RangeCalendar } from "@/components/history/RangeCalendar";
 import { useDeleteReport, useEditReport } from "@/components/report/ReportActions";
 import { usePublish, type PublishAsk } from "@/components/report/Publish";
-import { LoadingOverlay } from "@/components/report/ReportChrome";
+import { BADGE_TONE, LoadingOverlay } from "@/components/report/ReportChrome";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashDownload, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome, reportEditDetailsHref, reportHref } from "@/lib/companyPages";
@@ -73,20 +73,13 @@ const AMOUNT_COL = "flex flex-col min-[640px]:min-w-[90px] min-[1024px]:min-w-[1
 const AMOUNT_LABEL =
   "text-[10px] min-[414px]:text-xs min-[640px]:text-sm min-[1024px]:text-xl font-semibold text-flask-gray-600";
 
-const BADGE_LOOK: Record<ReturnType<typeof historyBadge>, { bg: string; ink: string }> = {
-  Published: { bg: "bg-flask-badge-published-bg", ink: "text-flask-badge-published-ink" },
-  "Publish failed": { bg: "bg-flask-badge-published-bg", ink: "text-flask-badge-published-ink" },
-  Draft: { bg: "bg-flask-submitted", ink: "text-flask-badge-draft-ink" },
-  Submitted: { bg: "bg-flask-red-soft", ink: "text-flask-red" },
-};
-
 const PAGER =
   "px-3 py-2 text-sm sm:px-4 sm:py-2 sm:text-base border border-flask-gray-300 rounded-flask-xl text-center";
-const PAGER_LINK = `${PAGER} text-flask-gray-700 hover:bg-flask-gray-50 transition-colors`;
+const PAGER_LINK = `${PAGER} text-flask-gray-700 hover:bg-flask-hover transition-colors`;
 // 44px high for a finger without moving Flask's layout (the pager's 36px buttons, the 32px ⋮ and chevron)
 const TALLER = "relative before:absolute before:inset-x-0 before:-inset-y-1 before:content-['']";
 const MENU_ITEM =
-  "w-full px-4 py-3 hover:bg-flask-gray-50 transition-colors cursor-pointer flex items-center text-flask-gray-600 text-left";
+  "w-full px-4 py-3 hover:bg-flask-hover transition-colors cursor-pointer flex items-center text-flask-gray-600 text-left";
 
 /**
  * Report history - a pixel-faithful port of Flask's ORIGINAL `report_history/report_history.html`
@@ -322,7 +315,7 @@ function HistoryBody({
               ] as const
             ).map(([id, label, value]) => (
               <div key={id} className="min-w-0 flex-1">
-                <label htmlFor={id} className="mb-1 block text-xs font-semibold text-flask-teal">
+                <label htmlFor={id} className="mb-1 block text-xs font-semibold text-flask-link">
                   {label}
                 </label>
                 <input
@@ -341,7 +334,7 @@ function HistoryBody({
                     }
                   }}
                   aria-haspopup="dialog"
-                  className="w-full cursor-pointer rounded-flask-xl border border-flask-gray-300 bg-flask-white px-3 py-3 text-sm text-flask-gray-700 placeholder:text-flask-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal"
+                  className="w-full cursor-pointer rounded-flask-xl border border-flask-gray-300 bg-flask-white px-3 py-3 text-sm text-flask-gray-700 placeholder:text-flask-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus"
                 />
               </div>
             ))}
@@ -365,7 +358,7 @@ function HistoryBody({
             disabled={exporting}
             aria-haspopup="menu"
             aria-expanded={csvMenu}
-            className={`flex flex-1 items-center justify-center rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors ${!exporting ? "hover:bg-flask-teal/80" : "cursor-not-allowed opacity-50"}`}
+            className={`flex flex-1 items-center justify-center rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors ${!exporting ? "hover:bg-flask-teal-hover active:bg-flask-teal-pressed" : "cursor-not-allowed opacity-50"}`}
           >
             {exporting ? (
               <>
@@ -484,7 +477,7 @@ function HistoryBody({
             <button
               type="button"
               onClick={retry}
-              className="mt-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+              className="mt-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
             >
               Try again
             </button>
@@ -585,7 +578,7 @@ function HistoryEntry({
   const [tip, setTip] = useState(false);
   const day = dayParts(row.transaction_date);
   const badge = historyBadge(row);
-  const look = BADGE_LOOK[badge];
+  const look = BADGE_TONE[badge];
   const reasons = badge === "Publish failed" && row.publish_reasons.length > 0;
   const draft = row.status === "draft";
   // a draft resumes at its own step of the wizard, in this app
@@ -643,9 +636,11 @@ function HistoryEntry({
                 </span>
               </div>
             </div>
-            <div className="flex flex-col min-[414px]:mr-4 min-[640px]:mr-6 min-[1024px]:mr-20">
+            {/* One width per row, whatever the badge or the names say, so Sales and Expenses line up
+                down the list (owner, 2026-11-18: a Draft row sat further right). */}
+            <div className="flex w-[92px] shrink-0 flex-col min-[414px]:mr-4 min-[414px]:w-[104px] min-[640px]:mr-6 min-[640px]:w-[120px] min-[1024px]:mr-20 min-[1024px]:w-[170px]">
               <div
-                className={`relative ${reasons ? "group cursor-help has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-flask-badge-published-ink" : ""} inline-flex w-fit flex-col rounded-flask-lg px-1.5 py-1 min-[414px]:px-2 min-[414px]:py-1.5 min-[640px]:px-3 min-[640px]:py-2 ${look.bg}`}
+                className={`relative ${reasons ? "group cursor-help has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-flask-focus" : ""} inline-flex w-fit flex-col rounded-flask-lg px-1.5 py-1 min-[414px]:px-2 min-[414px]:py-1.5 min-[640px]:px-3 min-[640px]:py-2 ${look.bg}`}
               >
                 {reasons ? (
                   <button
@@ -733,7 +728,7 @@ function HistoryEntry({
                   </div>
                 ) : null}
               </div>
-              <div className="mt-0.5 flex flex-col text-[8px] text-flask-gray-600 min-[414px]:mt-1 min-[414px]:text-[9px] min-[640px]:text-[10px] min-[1024px]:text-sm">
+              <div className="mt-0.5 flex min-w-0 flex-col break-words text-[8px] text-flask-gray-600 min-[414px]:mt-1 min-[414px]:text-[9px] min-[640px]:text-[10px] min-[1024px]:text-sm">
                 <span>{historyStamp(row)}</span>
                 {historyPeople(row).map((line) => (
                   <span key={line}>{line}</span>
@@ -750,7 +745,7 @@ function HistoryEntry({
                   aria-haspopup="menu"
                   aria-expanded={menuOpen}
                   aria-controls={menuOpen ? menuId : undefined}
-                  className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-flask-gray-50 text-flask-gray-400 transition-colors before:absolute before:-inset-x-1.5 before:-bottom-1 before:-top-2 before:content-[''] hover:bg-flask-gray-50"
+                  className="relative flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-flask-gray-50 text-flask-gray-400 transition-colors before:absolute before:-inset-x-1.5 before:-bottom-1 before:-top-2 before:content-[''] hover:bg-flask-hover"
                 >
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
                     <circle cx="10" cy="5" r="1.5" fill="currentColor" />

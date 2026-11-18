@@ -57,12 +57,12 @@ import {
 import { descriptionProblem } from "@/lib/report";
 
 const FIELD =
-  "w-full rounded-flask-2xl border bg-flask-white py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal cursor-pointer";
+  "w-full rounded-flask-2xl border bg-flask-white py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus cursor-pointer";
 const LABEL = "mb-2 block text-sm font-medium text-flask-gray-700";
 const OUTLINE_BUTTON =
-  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10";
+  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-3 font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft";
 const FILLED_BUTTON =
-  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80 disabled:opacity-70";
+  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70";
 const ADD_FAILED = "An error occurred while adding the expense. Please try again.";
 const EDIT_FAILED = "An error occurred while updating the expense. Please try again.";
 
@@ -583,14 +583,14 @@ export function AddExpenseCard(props: AddExpenseProps) {
                 setNewContact(null);
                 change("supplier", { supplierText: "", supplier: null });
               }}
-              className="flex-1 rounded-flask-xl border-2 border-flask-teal px-4 py-2 text-sm font-medium text-flask-teal transition-colors hover:bg-flask-teal/10"
+              className="flex-1 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-2 text-sm font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={() => void createSupplier()}
-              className="flex-1 rounded-flask-xl bg-flask-teal px-4 py-2 text-sm font-medium text-flask-white transition-colors hover:bg-flask-teal/80"
+              className="flex-1 rounded-flask-xl bg-flask-teal px-4 py-2 text-sm font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
             >
               Create
             </button>
@@ -649,7 +649,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
 
 type Option = { key: string; content: ReactNode; className: string; pick?: () => void };
 
-const ITEM = "cursor-pointer px-4 py-2 hover:bg-flask-gray-100";
+const ITEM = "cursor-pointer px-4 py-2 hover:bg-flask-hover";
 
 /** A supplier list's note, shown as it opens (onboarding's "Type a contact name..."). */
 const CONTACT_HINT_ROW: Option = {
@@ -848,7 +848,7 @@ function SearchField({
                     if (el && highlighted)
                       el.scrollIntoView({ block: "nearest", behavior: "smooth" });
                   }}
-                  className={`${o.className} ${highlighted ? "bg-flask-gray-100" : ""}`}
+                  className={`${o.className} ${highlighted ? "bg-flask-hover" : ""}`}
                   onMouseDown={(e) => {
                     // keep the focus in the input, so its blur does not close the list first
                     e.preventDefault();
@@ -928,7 +928,7 @@ function ReceiptDrop({
   else if (file || kept)
     look = "border-2 border-dashed border-flask-upload-ok bg-flask-upload-ok-bg p-6";
   else
-    look = `border-2 border-dashed ${invalid ? "border-flask-red-500" : "border-flask-gray-300"} bg-flask-gray-50 p-6 hover:bg-flask-gray-100`;
+    look = `border-2 border-dashed ${invalid ? "border-flask-red-500" : "border-flask-gray-300"} bg-flask-gray-50 p-6 hover:bg-flask-hover`;
 
   return (
     <div className="mb-6">
@@ -967,7 +967,7 @@ function ReceiptDrop({
           setDragging(false);
           take(Array.from(e.dataTransfer.files), "dropped");
         }}
-        className={`relative cursor-pointer overflow-hidden rounded-flask-md text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal ${look}`}
+        className={`relative cursor-pointer overflow-hidden rounded-flask-md text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus ${look}`}
       >
         <button
           type="button"

@@ -26,9 +26,9 @@ export const REPUBLISH_IN_XERO =
 const SPINNER_PATH =
   "M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z";
 const CANCEL =
-  "flex-1 rounded-flask-xl border-2 border-flask-teal px-4 py-3 font-medium text-flask-teal transition-colors hover:bg-flask-teal/10";
+  "flex-1 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-3 font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft";
 const CONFIRM =
-  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80";
+  "flex flex-1 items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed";
 
 /** A partly published report re-sent from history: only what failed goes (2026-11-17). */
 export const REPUBLISH_MISSING =
@@ -91,7 +91,7 @@ function PublishingOverlay({
     if (slow) check.current?.focus();
   }, [slow]);
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-flask-black/60 p-4">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-flask-scrim p-4">
       <div
         role={slow ? "alertdialog" : "dialog"}
         aria-modal="true"

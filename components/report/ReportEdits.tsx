@@ -43,12 +43,12 @@ const NOTHING_CHANGED = "Nothing has changed yet. Change a detail to save it.";
 
 /** Flask's small "Save changes" (`text-sm px-4 py-2 rounded-lg`), 44px tall on a phone. */
 const SAVE_SMALL =
-  "min-h-[44px] rounded-flask-lg bg-flask-teal px-4 py-2 text-sm font-medium text-flask-white transition-colors hover:bg-flask-teal/80 disabled:opacity-70 sm:min-h-0";
+  "min-h-[44px] rounded-flask-lg bg-flask-teal px-4 py-2 text-sm font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70 sm:min-h-0";
 const CARD = "mb-6 rounded-flask-lg bg-flask-white p-6 shadow-flask-sm";
 const CARD_TITLE = "text-sm font-semibold text-flask-gray-900 sm:text-lg";
 /** The line editor's fields, as Flask's (`px-3 py-2 border rounded-lg text-sm`). */
 const EDIT_FIELD =
-  "w-full rounded-flask-lg border bg-flask-white px-3 py-2 text-sm text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal";
+  "w-full rounded-flask-lg border bg-flask-white px-3 py-2 text-sm text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus";
 const EDIT_LABEL = "mb-1 block text-sm font-medium text-flask-gray-700";
 
 type Saved = (report: DailyReport) => void;
@@ -184,7 +184,7 @@ export function ReasonEditor({
           setReason(e.target.value);
           setRefused(null);
         }}
-        className={`block w-full resize-none rounded-flask-2xl border bg-flask-white px-3 py-3 text-sm text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal ${
+        className={`block w-full resize-none rounded-flask-2xl border bg-flask-white px-3 py-3 text-sm text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
           message ? "border-flask-red-500" : "border-flask-gray-300"
         }`}
       />
@@ -214,7 +214,7 @@ export function EditDetailsButton({
     <button
       type="button"
       onClick={onToggle}
-      className={`group ${spacing} flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-olive px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-olive/80`}
+      className={`group ${spacing} flex w-full items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-secondary-edge bg-flask-white text-flask-secondary-ink hover:bg-flask-teal-soft px-4 py-3 font-medium shadow-flask-md transition-colors`}
     >
       {editing ? (
         <svg
@@ -574,12 +574,12 @@ export function LineEditor({
           aria-labelledby="editExpFiles_label editExpFileText"
           aria-describedby={receiptMessage ? "editExpFiles_message" : "editExpFiles_hint"}
           onClick={() => fileInput.current?.click()}
-          className={`block w-full cursor-pointer rounded-flask-lg border-2 border-dashed p-4 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal ${
+          className={`block w-full cursor-pointer rounded-flask-lg border-2 border-dashed p-4 text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus ${
             receiptMessage
-              ? "border-flask-red-500 bg-flask-gray-50 hover:bg-flask-gray-100"
+              ? "border-flask-red-500 bg-flask-gray-50 hover:bg-flask-hover"
               : receipt
                 ? "border-flask-upload-ok bg-flask-upload-ok-bg"
-                : "border-flask-gray-300 bg-flask-gray-50 hover:bg-flask-gray-100"
+                : "border-flask-gray-300 bg-flask-gray-50 hover:bg-flask-hover"
           }`}
         >
           <span
@@ -611,7 +611,7 @@ export function LineEditor({
         <button
           type="submit"
           disabled={saving}
-          className="w-full rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal/80 disabled:opacity-70"
+          className="w-full rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70"
         >
           {saving ? "Saving..." : "Save changes"}
         </button>

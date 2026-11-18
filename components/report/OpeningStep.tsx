@@ -266,7 +266,7 @@ function OpeningForm({
                     300,
                   )
                 }
-                className="w-full cursor-pointer rounded-flask-xl border border-flask-gray-300 bg-flask-white py-3 pl-12 pr-3 text-flask-gray-700 placeholder:text-flask-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-teal"
+                className="w-full cursor-pointer rounded-flask-xl border border-flask-gray-300 bg-flask-white py-3 pl-12 pr-3 text-flask-gray-700 placeholder:text-flask-gray-500 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus"
               />
             </div>
           </div>
@@ -312,7 +312,7 @@ function OpeningForm({
           <button
             type="submit"
             disabled={saving}
-            className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80 disabled:opacity-70"
+            className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70"
           >
             <span>Save &amp; Next</span>
             <svg
@@ -334,7 +334,7 @@ function OpeningForm({
               type="button"
               disabled={saving}
               onClick={() => void save("exit")}
-              className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-teal transition-colors hover:text-flask-teal/80"
+              className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-link transition-colors hover:text-flask-link/80"
             >
               <span>Save &amp; Exit</span>
             </button>
@@ -367,7 +367,7 @@ function OpeningNegativeModal({
       <FixStepButton
         label="Dashboard"
         note={`(Balance: ${formatMoney(balance, currencyCode)})`}
-        noteClass="text-flask-red"
+        noteClass="text-flask-error"
         onClick={onDashboard}
       />
     </FixNegativeBalanceModal>

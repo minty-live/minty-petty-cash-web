@@ -42,7 +42,7 @@ const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then r
 const READ_ONLY = "Read-only access";
 
 const TEAL_BUTTON =
-  "flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80 disabled:cursor-not-allowed disabled:opacity-50";
+  "flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:cursor-not-allowed disabled:opacity-50";
 
 type Load =
   { kind: "loading" } | { kind: "ready"; home: Home; nextDay: string | null } | { kind: "failed" };
@@ -352,7 +352,7 @@ function DashboardBody({
                   viewBox="0 0 24 24"
                   strokeWidth="2"
                   stroke="currentColor"
-                  className="h-5 w-5 text-flask-red"
+                  className="h-5 w-5 text-flask-error"
                   aria-hidden="true"
                 >
                   <path
@@ -425,7 +425,7 @@ function DashboardBody({
                   actionReport &&
                   leaveTo(reportHref(entityId, entityName, actionReport.id, "summary"))
                 }
-                className="flex w-full items-center justify-center rounded-flask-xl bg-flask-green px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-green/80"
+                className="flex w-full items-center justify-center rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
               >
                 <span>View Report</span>
               </button>

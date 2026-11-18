@@ -288,7 +288,7 @@ function StepViewBody({
         <button
           type="button"
           onClick={() => goBack(historyHref(entityId, entityName), { skip: CLOSE_REPORT_SKIP })}
-          className="group flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal/80"
+          className="group flex w-full items-center justify-center gap-2 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed"
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -655,7 +655,7 @@ function CashCountView({
               title="Calculator"
               aria-label="Calculator"
               onClick={onCalculator}
-              className="shrink-0 rounded-flask-xl border border-flask-gray-200 bg-flask-teal p-2 hover:bg-flask-teal/80 focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-flask-teal-ink"
+              className="shrink-0 rounded-flask-xl border border-flask-gray-200 bg-flask-teal p-2 hover:bg-flask-teal-hover active:bg-flask-teal-pressed focus:outline-none focus:ring-0 focus-visible:ring-2 focus-visible:ring-flask-focus"
             >
               {/* eslint-disable-next-line @next/next/no-img-element -- Flask's 27px icon drawn at 32px */}
               <img src="/img/btn_calculator.webp" alt="" className="h-8 w-8" />
@@ -738,7 +738,7 @@ function CountsModal({ report, onClose }: { report: DailyReport; onClose: () => 
   }, [onClose]);
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-flask-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-flask-scrim p-4"
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -759,7 +759,7 @@ function CountsModal({ report, onClose }: { report: DailyReport; onClose: () => 
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="-m-2.5 inline-flex h-11 w-11 items-center justify-center text-flask-gray-500 hover:text-flask-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-teal"
+            className="-m-2.5 inline-flex h-11 w-11 items-center justify-center text-flask-gray-500 hover:text-flask-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -831,7 +831,7 @@ function CountsModal({ report, onClose }: { report: DailyReport; onClose: () => 
         <button
           type="button"
           onClick={onClose}
-          className="w-full rounded-flask-xl bg-flask-teal px-4 py-3 text-flask-white hover:bg-flask-teal/80 focus:outline-none focus:ring-2 focus:ring-flask-teal"
+          className="w-full rounded-flask-xl bg-flask-teal px-4 py-3 text-flask-white hover:bg-flask-teal-hover active:bg-flask-teal-pressed focus:outline-none focus:ring-2 focus:ring-flask-focus"
         >
           Close
         </button>

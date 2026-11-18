@@ -264,7 +264,7 @@ test("Flask's page: the draft callout, the four cards, the figures and the short
 
   const history = card(page, "Sales History");
   await expect(history.locator("rect")).toHaveCount(30);
-  await expect(history.locator("rect.fill-flask-red")).toHaveCount(1);
+  await expect(history.locator("rect.fill-flask-chart-day")).toHaveCount(1);
   await expect(history.getByText("1.2k")).toBeAttached();
   await expect(history.locator("text").filter({ hasText: /^13 OCT$/ })).toBeAttached();
 
