@@ -29,6 +29,53 @@ export type PublishingStatus = {
   reasons: { text: string; resolved: boolean }[];
 };
 
+/**
+ * A contact the report uses that Xero archived without merging it (owner's decisions, C4,
+ * 2026-11-19): the publish answers 409 with these and sends nothing. A merged one is followed to
+ * the contact Xero kept with no question; Minty never restores anything in the customer's Xero.
+ */
+export type ArchivedContact = { id: string; name: string };
+
+/** One of the company's active Xero contacts (`GET /xero/contacts`, A-Z). */
+export type XeroContact = { xero_contact_id: string; name: string };
+
+/** The doc's sentence for one archived contact (the API joins one per contact with "\n"). */
+export function archivedSentence(name: string): string {
+  return `${name} is archived in Xero. Restore it in Xero, or map it to another contact now.`;
+}
+
+/** A 409's `archived_contacts`, or null when it has none (any other 409 keeps its toast). */
+export function archivedContacts(body: unknown): ArchivedContact[] | null {
+  const list = (body as { archived_contacts?: unknown } | null)?.archived_contacts;
+  if (!Array.isArray(list)) return null;
+  const contacts = list.filter(
+    (c): c is ArchivedContact =>
+      !!c && typeof c === "object" && typeof c.id === "string" && typeof c.name === "string",
+  );
+  return contacts.length ? contacts : null;
+}
+
+/** The company's active Xero contacts, to map an archived one to. */
+export async function loadXeroContacts(
+  fetcher: typeof pettyCashFetch = pettyCashFetch,
+): Promise<XeroContact[]> {
+  const answer = await fetcher<{ contacts: XeroContact[] }>("/xero/contacts");
+  return answer.contacts;
+}
+
+/** Map a Minty contact to a Xero contact (`POST /contacts/<id>/xero-link`); its answer's sentence. */
+export async function linkXeroContact(
+  contactId: string,
+  xeroContactId: string,
+  fetcher: typeof pettyCashFetch = pettyCashFetch,
+): Promise<string> {
+  const answer = await fetcher<{ message: string; contact_id: string }>(
+    `/contacts/${encodeURIComponent(contactId)}/xero-link`,
+    { method: "POST", json: { xero_contact_id: xeroContactId } },
+  );
+  return answer.message;
+}
+
 /** How a publish ended - or why it never started. */
 export type PublishEnd =
   | { kind: "published" }
@@ -37,8 +84,17 @@ export type PublishEnd =
   | { kind: "failed" }
   /** Still `publishing` after the cap. */
   | { kind: "slow" }
-  /** The start was refused: the API's sentence; `reconnect` when Xero must be connected again. */
-  | { kind: "refused"; message: string; status: number; reconnect: boolean }
+  /**
+   * The start was refused: the API's sentence; `reconnect` when Xero must be connected again;
+   * `archived` (a 409) when Xero archived contacts the report uses without a merge (C4).
+   */
+  | {
+      kind: "refused";
+      message: string;
+      status: number;
+      reconnect: boolean;
+      archived?: ArchivedContact[];
+    }
   /** A status read was refused (the report is gone, or the right was taken away). */
   | { kind: "lost"; message: string }
   /** A 401: the browser is already on its way back through Flask's hand-off. */
@@ -170,11 +226,13 @@ export function runPublish(reportId: string, run: PublishRun): () => void {
         if (err instanceof ApiError && err.status === 401) return end({ kind: "signed-out" });
         if (err instanceof ApiError) {
           const body = err.body as { reconnect?: unknown } | null;
+          const archived = err.status === 409 ? archivedContacts(err.body) : null;
           return end({
             kind: "refused",
             message: err.message,
             status: err.status,
             reconnect: body?.reconnect === true,
+            ...(archived ? { archived } : {}),
           });
         }
         end({ kind: "refused", message: PUBLISH_WORDS.unreachable, status: 0, reconnect: false });

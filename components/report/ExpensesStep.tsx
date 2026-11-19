@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { AddExpenseCard } from "@/components/report/AddExpenseCard";
@@ -28,6 +29,7 @@ import {
 } from "@/lib/expenses";
 import { formatMoney } from "@/lib/money";
 import { datePill } from "@/lib/opening";
+import { alreadySavedOf, expensesSavedRows } from "@/lib/stepConflict";
 import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP } from "@/lib/wizardPages";
 
@@ -134,13 +136,14 @@ function ExpensesForm({
   const [busy, setBusy] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ExpenseLine | null>(null);
   const [deleting, setDeleting] = useState<ExpenseLine | null>(null);
+  const alreadySaved = useAlreadySaved();
 
   async function save(action: "next" | "exit") {
     setBusy("Saving...");
     try {
       const answer = await pettyCashFetch<SaveAnswer>("/reports/expenses", {
         method: "PUT",
-        json: { transaction_date: day, action },
+        json: { transaction_date: day, action, edit_version: page.edit_version },
       });
       if (answer.next === "dashboard") {
         router.push(home);
@@ -150,6 +153,16 @@ function ExpensesForm({
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
       setBusy(null);
+      const stale = alreadySavedOf<ExpensesPage>(err);
+      if (stale) {
+        // R2: someone else saved this step first - show what they saved, then go on.
+        alreadySaved.show(
+          stale.sentence,
+          expensesSavedRows(stale.saved),
+          stepHref(entityId, entityName, stale.next, day),
+        );
+        return;
+      }
       if (toOpening(err)) backToOpening(sentenceOf(err) ?? SAVE_FAILED, day);
       else toast(sentenceOf(err) ?? SAVE_FAILED, "error");
     }
@@ -206,6 +219,7 @@ function ExpensesForm({
         />
       ) : null}
       {busy ? <LoadingOverlay text={busy} /> : null}
+      {alreadySaved.dialog}
     </>
   );
 

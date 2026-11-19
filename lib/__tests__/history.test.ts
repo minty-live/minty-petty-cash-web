@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  attemptLabel,
   CSV_CHOICES,
   csvFileName,
   csvRequest,
@@ -15,11 +16,14 @@ import {
   historyPeople,
   historyQuery,
   historyStamp,
+  hkStamp,
   pagerItems,
   pickDay,
   pickedRange,
+  reportHistoryHref,
   shownRange,
   type HistoryRow,
+  type PublishAttempt,
 } from "@/lib/history";
 
 const ENTITY = "360812e1-9f94-46a3-aa31-347e21afde8e";
@@ -41,7 +45,6 @@ const row = (over: Partial<HistoryRow> = {}): HistoryRow => ({
   created_at: "2026-10-13T01:30:00+00:00",
   was_published: false,
   xero_removable: false,
-  publish_reasons: [],
   permissions: { edit: false, delete: false, edit_details: false },
   ...over,
 });
@@ -272,5 +275,30 @@ describe("the date range, as Flask's range calendar picks it", () => {
       start: "2026-10-01",
       end: "2026-10-05",
     });
+  });
+});
+
+describe("a report's publish History", () => {
+  it("links to the report's view at its History section", () => {
+    expect(reportHistoryHref(ENTITY, "Olive & Vine", "r-1")).toBe(
+      "/entity/360812e1/olive-and-vine/petty-cash/reports/r-1/summary#history",
+    );
+  });
+
+  it("labels an attempt as the report's badge does", () => {
+    const attempt = (action: PublishAttempt["action"]): PublishAttempt => ({
+      at: null,
+      user_name: null,
+      action,
+      details: [],
+    });
+    expect(attemptLabel(attempt("published"))).toBe("Published");
+    expect(attemptLabel(attempt("publish_failed"))).toBe("Publish failed");
+  });
+
+  it("writes a moment in Hong Kong time, and nothing for none", () => {
+    expect(hkStamp("2026-11-19T02:30:00+00:00")).toBe("19 Nov 2026 10:30");
+    expect(hkStamp(null)).toBe("");
+    expect(hkStamp("not a date")).toBe("");
   });
 });

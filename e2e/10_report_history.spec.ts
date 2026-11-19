@@ -51,7 +51,6 @@ function row(over: Json = {}): Json {
     published_at: null,
     created_at: "2026-10-13T01:30:00+00:00",
     was_published: false,
-    publish_reasons: [],
     permissions: { edit: true, delete: true },
     ...over,
   };
@@ -79,10 +78,6 @@ const ROWS = [
     status_tone: "danger",
     total_sales: 1234567.5,
     was_published: true,
-    publish_reasons: [
-      { text: "Account 400 is archived in Xero.", resolved: false },
-      { text: "Acme isn't a Xero contact.", resolved: true },
-    ],
     permissions: { edit: false, delete: false },
   }),
 ];
@@ -278,32 +273,17 @@ test("the header, the date filter and the list: each day, its figures, badge, ti
   await expectNoHorizontalScroll(page);
 });
 
-test("a failed publish's reasons show on the badge, a resolved one struck through", async ({
-  page,
-}, info) => {
+test("a failed publish's ⓘ opens the report's History, where its issues are", async ({ page }) => {
   await open(page);
-  const badge = entry(page, FAILED).getByRole("button", { name: "Publish failed" });
-  const tip = entry(page, FAILED).getByRole("tooltip");
-  await expect(tip).toBeHidden();
-  if (info.project.name === "desktop") {
-    // Flask's hover
-    await badge.hover();
-    await expect(tip).toBeVisible();
-    await page.mouse.move(0, 0);
-    await expect(tip).toBeHidden();
-  }
-  // a tap opens them (a phone has no hover), and a tap elsewhere closes them
-  await badge.click();
-  await expect(tip).toBeVisible();
-  await expect(badge).toHaveAttribute("aria-expanded", "true");
-  await expect(tip.getByText("Publish issues:")).toBeVisible();
-  await expect(tip.getByText("Account 400 is archived in Xero.")).toBeVisible();
-  await expect(tip.getByText("Acme isn't a Xero contact.")).toHaveClass(/line-through/);
+  // the reasons are no longer on the list (owner's H1, 2026-11-19): no popover
+  await expect(entry(page, FAILED).getByRole("tooltip")).toHaveCount(0);
+  const why = entry(page, FAILED).getByRole("link", { name: "See why it didn't publish" });
+  await expect(why).toHaveAttribute("href", `${HISTORY}/${FAILED}/summary#history`);
+  // no other row has one
+  await expect(page.getByRole("link", { name: "See why it didn't publish" })).toHaveCount(1);
   await expectNoHorizontalScroll(page);
-  await page.getByRole("heading", { name: "Report Results" }).click();
-  await expect(tip).toBeHidden();
-  // no other row has any
-  await expect(entry(page, LATEST).getByRole("button", { name: "Submitted" })).toHaveCount(0);
+  await why.click();
+  await expect(page).toHaveURL(new RegExp(`/reports/${FAILED}/summary#history$`));
 });
 
 test("filtering by dates: the range calendar, Search Report, the address, reload and Back", async ({

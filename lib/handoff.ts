@@ -24,6 +24,7 @@ import { safeNextPath } from "@minty/shared/safeNext";
 import { clearAuth, getAuth } from "@/lib/auth";
 import { companyRefFromPath } from "@/lib/companyPages";
 import { env } from "@/lib/env";
+import { sessionExpiredShown, showSessionExpired } from "@/lib/sessionExpired";
 
 /** Where a hand-off with nowhere better to go lands: the company's Petty Cash, via the root. */
 export const APP_HOME = "/";
@@ -151,12 +152,32 @@ let redirecting = false;
  * already under way is how a redirect turns into a flicker.
  */
 export function redirectToHandoff(next?: string, company?: string) {
-  if (redirecting || typeof window === "undefined") return;
+  if (redirecting || sessionExpiredShown() || typeof window === "undefined") return;
   redirecting = true;
   const entity = company ?? (getAuth()?.entityId || undefined);
   clearAuth();
   const target = next ?? window.location.pathname + window.location.search;
   navigate(handoffUrl(target, entity));
+}
+
+/**
+ * The hub's sign-in page when the sign-in behind the token has ENDED (lib/sessionExpired.ts,
+ * 2026-11-19): accounts-api's front door (`/`), which sends the person to minty-web's `/login` -
+ * the right copy of it on a preview set - with `next` = the re-hand-off (a path on accounts-api)
+ * back to this page; someone signed in again meanwhile (another tab) goes straight back.
+ */
+export function sessionExpiredLoginUrl(company?: string): string {
+  const entity = company ?? (getAuth()?.entityId || undefined);
+  const back = new URL(handoffUrl(window.location.pathname + window.location.search, entity));
+  return `${env.ACCOUNTS_API_URL}/?${new URLSearchParams({ next: back.pathname + back.search }).toString()}`;
+}
+
+/** "Your session has expired": the cookie cleared, then `showSessionExpired` - once. */
+export function sessionExpired(company?: string) {
+  if (sessionExpiredShown() || typeof window === "undefined") return;
+  const url = sessionExpiredLoginUrl(company);
+  clearAuth();
+  showSessionExpired(url);
 }
 
 /** Leave the app for another Minty address through the same seam (tests capture it). */

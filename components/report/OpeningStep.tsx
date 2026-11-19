@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
 import { formatAmount } from "@minty/shared/money";
@@ -10,6 +10,7 @@ import { formatAmount } from "@minty/shared/money";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FixNegativeBalanceModal,
@@ -24,6 +25,7 @@ import { parseMoney } from "@/lib/currencyInput";
 import { setFlash } from "@/lib/flash";
 import { formatMoney } from "@/lib/money";
 import { datePill, type OpeningPage } from "@/lib/opening";
+import { alreadySavedOf, openingSavedRows, reportStartedOf } from "@/lib/stepConflict";
 import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP } from "@/lib/wizardPages";
 
@@ -43,6 +45,9 @@ export function OpeningStep({ day }: { day: string | null }) {
   const auth = useAuth();
   const [page, setPage] = useState<OpeningPage | null>(null);
   const [failed, setFailed] = useState(false);
+  // Read again when someone else started the day first (R1): the form then shows their report.
+  const [reads, setReads] = useState(0);
+  const reload = useCallback(() => setReads((n) => n + 1), []);
 
   useEffect(() => {
     let live = true;
@@ -58,7 +63,7 @@ export function OpeningStep({ day }: { day: string | null }) {
     return () => {
       live = false;
     };
-  }, [day, toast]);
+  }, [day, toast, reads]);
 
   const acronym = entityAcronym(auth?.entityName);
   if (!page || !auth) {
@@ -74,7 +79,9 @@ export function OpeningStep({ day }: { day: string | null }) {
   }
   return (
     <OpeningForm
+      key={`${page.draft?.id ?? "new"}:${page.edit_version ?? ""}`}
       page={page}
+      onReload={reload}
       entityId={auth.entityId}
       entityName={auth.entityName}
       acronym={acronym}
@@ -84,11 +91,13 @@ export function OpeningStep({ day }: { day: string | null }) {
 
 function OpeningForm({
   page,
+  onReload,
   entityId,
   entityName,
   acronym,
 }: {
   page: OpeningPage;
+  onReload: () => void;
   entityId: string;
   entityName: string;
   acronym: string;
@@ -106,6 +115,7 @@ function OpeningForm({
   const [saving, setSaving] = useState(false);
   const [negative, setNegative] = useState(page.yesterday_closing_balance < 0);
   const [imageLoaded, setImageLoaded] = useState(false);
+  const alreadySaved = useAlreadySaved();
   const field = useRef<HTMLInputElement>(null);
 
   const code = page.currency_code;
@@ -128,12 +138,44 @@ function OpeningForm({
     try {
       const answer = await pettyCashFetch<SaveAnswer>("/reports/opening", {
         method: "PUT",
-        json: { transaction_date: day, cash_addition: parseMoney(addition), withdrawal, action },
+        json: {
+          transaction_date: day,
+          cash_addition: parseMoney(addition),
+          withdrawal,
+          action,
+          edit_version: page.edit_version,
+        },
       });
       if (answer.next !== "sales") router.push(home);
       else router.push(stepHref(entityId, entityName, "sales", answer.transaction_date));
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
+      const started = reportStartedOf(err);
+      if (started) {
+        // R1: someone else started the day first - nothing typed here was saved; go to their report.
+        if (started.to === "dashboard") {
+          setFlash(started.sentence, "warning");
+          router.push(home);
+        } else if (started.to === "opening") {
+          toast(started.sentence, "warning");
+          onReload();
+        } else {
+          toast(started.sentence, "warning");
+          router.push(stepHref(entityId, entityName, started.to, day));
+        }
+        return;
+      }
+      const stale = alreadySavedOf<OpeningPage>(err);
+      if (stale) {
+        // R2: someone else saved this step first - show what they saved, then go on.
+        setSaving(false);
+        alreadySaved.show(
+          stale.sentence,
+          openingSavedRows(stale.saved),
+          stepHref(entityId, entityName, stale.next, day),
+        );
+        return;
+      }
       const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
       const message =
         err instanceof ApiError ? err.message : "I couldn't save that. Mind trying again?";
@@ -155,6 +197,7 @@ function OpeningForm({
     <>
       {leave}
       {saving ? <LoadingOverlay /> : null}
+      {alreadySaved.dialog}
       {negative ? (
         <OpeningNegativeModal
           balance={page.yesterday_closing_balance}

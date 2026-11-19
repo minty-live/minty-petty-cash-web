@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useToast } from "@/components/flask/Toasts";
+import { ArchivedContactsDialog } from "@/components/report/ArchivedContacts";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import {
   PUBLISH_WORDS,
   partialMessage,
+  type ArchivedContact,
   publishingLabel,
   runPublish,
   type PublishEnd,
@@ -228,6 +230,12 @@ export function usePublish({
     slow: boolean;
   } | null>(null);
   const [reconnect, setReconnect] = useState<string | null>(null);
+  /** A publish refused over contacts Xero archived (C4): map them, then publish again. */
+  const [archived, setArchived] = useState<{
+    reportId: string;
+    republish: boolean;
+    contacts: ArchivedContact[];
+  } | null>(null);
   const cancel = useRef<(() => void) | null>(null);
   const changed = useRef(onChanged);
   useEffect(() => {
@@ -242,7 +250,7 @@ export function usePublish({
   );
 
   const ended = useCallback(
-    (end: PublishEnd, republish: boolean) => {
+    (end: PublishEnd, republish: boolean, reportId: string) => {
       cancel.current = null;
       if (end.kind === "slow") {
         setRunning((r) => (r ? { ...r, slow: true } : r));
@@ -271,6 +279,7 @@ export function usePublish({
           break;
         case "refused":
           if (end.reconnect) setReconnect(end.message);
+          else if (end.archived) setArchived({ reportId, republish, contacts: end.archived });
           // the Submitted page warned of a publish already under way; history said it as an error
           else
             toast(end.message, end.status === 409 && place === "submitted" ? "warning" : "error");
@@ -297,7 +306,7 @@ export function usePublish({
         republish,
         start,
         onProgress: (percent, label) => setRunning((r) => (r ? { ...r, percent, label } : r)),
-        onEnd: (end) => ended(end, republish),
+        onEnd: (end) => ended(end, republish, reportId),
       });
     },
     [ended],
@@ -331,6 +340,16 @@ export function usePublish({
           entityId={entityId}
           entityName={entityName}
           onClose={() => setReconnect(null)}
+        />
+      ) : null}
+      {archived ? (
+        <ArchivedContactsDialog
+          contacts={archived.contacts}
+          onCancel={() => setArchived(null)}
+          onMapped={() => {
+            setArchived(null);
+            go(archived.reportId, archived.republish, true);
+          }}
         />
       ) : null}
       {running ? (

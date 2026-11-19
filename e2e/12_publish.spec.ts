@@ -103,7 +103,6 @@ function row(over: Json = {}): Json {
     published_at: null,
     created_at: "2026-10-13T01:30:00+00:00",
     was_published: false,
-    publish_reasons: [],
     permissions: { edit: true, delete: true },
     ...over,
   };
@@ -124,7 +123,6 @@ const ROWS = [
     transaction_date: "2026-10-10",
     status_label: "Publish failed",
     was_published: true,
-    publish_reasons: [{ text: "Account 400 is archived in Xero.", resolved: false }],
     permissions: { edit: false, delete: false },
   }),
 ];

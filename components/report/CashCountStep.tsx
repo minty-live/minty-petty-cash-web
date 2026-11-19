@@ -9,6 +9,7 @@ import { formatAmount } from "@minty/shared/money";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
@@ -43,6 +44,7 @@ import { parseMoney } from "@/lib/currencyInput";
 import { formatMoney } from "@/lib/money";
 import { datePill } from "@/lib/opening";
 import { changed } from "@/lib/sales";
+import { alreadySavedOf, cashCountSavedRows } from "@/lib/stepConflict";
 import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP, type WizardStep } from "@/lib/wizardPages";
 
@@ -164,6 +166,7 @@ function CashCountForm({
   });
   const [calculator, setCalculator] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const alreadySaved = useAlreadySaved();
   const [negative, setNegative] = useState(expected < 0);
   const reasonField = useRef<HTMLTextAreaElement>(null);
   const safeField = useRef<HTMLInputElement>(null);
@@ -234,6 +237,7 @@ function CashCountForm({
           safe_box_balance: safeAmount,
           discrepancy_reason: out ? reason : "",
           action,
+          edit_version: page.edit_version,
         },
       });
       if (answer.next === "dashboard") router.push(home);
@@ -241,6 +245,16 @@ function CashCountForm({
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
       setBusy(null);
+      const stale = alreadySavedOf<CashCountPage>(err);
+      if (stale) {
+        // R2: someone else saved this step first - show what they saved, then go on.
+        alreadySaved.show(
+          stale.sentence,
+          cashCountSavedRows(stale.saved),
+          stepHref(entityId, entityName, stale.next, day),
+        );
+        return;
+      }
       const sentence = sentenceOf(err) ?? SAVE_FAILED;
       const field = fieldOf(err);
       if (toOpening(err)) backToOpening(sentence, day);
@@ -285,6 +299,7 @@ function CashCountForm({
         />
       ) : null}
       {busy ? <LoadingOverlay text={busy} /> : null}
+      {alreadySaved.dialog}
       {negative ? (
         <FixNegativeBalanceModal
           balance={expected}

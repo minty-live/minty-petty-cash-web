@@ -13,7 +13,7 @@ vi.mock("@/lib/apiClient", async (original) => ({
 
 import { ToastProvider } from "@/components/flask/Toasts";
 import { AddExpenseCard, type AddExpenseProps } from "@/components/report/AddExpenseCard";
-import { pettyCashFetch } from "@/lib/apiClient";
+import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { resetReaderLatch } from "@/lib/expenseAi";
 
 const fetchMock = vi.mocked(pettyCashFetch);
@@ -554,6 +554,114 @@ describe("Edit Expense (the add card on a saved draft line)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(props.onCancel).toHaveBeenCalled();
     expect(edits).toHaveLength(0);
+  });
+});
+
+describe("the duplicate reminder before a line is saved (owner's decisions doc DUP1, 2026-11-19)", () => {
+  const SENTENCE =
+    "This looks like an expense you already have on this day: the same supplier and amount. Save it anyway?";
+  const DUPLICATE = new ApiError(409, SENTENCE, {
+    error: SENTENCE,
+    duplicates: [{ id: "e2", description: "Copy paper", amount: "1012.50", supplier: "Wellcome" }],
+  });
+  const LINE = {
+    id: "l1",
+    item: "General Expenses",
+    amount: 1200.5,
+    description: "Milk",
+    supplier: SUPPLIERS[0],
+    account: ACCOUNTS[0],
+    receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+  };
+
+  /** Each save (add or edit) answers the next of `answers`; an ApiError is thrown. */
+  function saves(...answers: unknown[]) {
+    const sent: { path: string; form: FormData }[] = [];
+    fetchMock.mockImplementation(async (path, init) => {
+      sent.push({ path, form: init?.form as FormData });
+      const next = answers.length > 1 ? answers.shift() : answers[0];
+      if (next instanceof Error) throw next;
+      return next;
+    });
+    return sent;
+  }
+
+  async function fillAndAdd() {
+    await attach(png());
+    await userEvent.type(amount(), "1012.50");
+    await userEvent.type(description(), "Paper");
+    await userEvent.click(supplier());
+    await userEvent.click(screen.getByRole("option", { name: "Wellcome" }));
+    await userEvent.click(account());
+    await userEvent.click(screen.getByRole("option", { name: /General Expenses/ }));
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+  }
+
+  it("asks with the API's sentence and the matching line, and adds nothing yet", async () => {
+    saves(DUPLICATE);
+    const props = show({ reader: { enabled: false } });
+    await fillAndAdd();
+    const dialog = await screen.findByRole("dialog", { name: "Save it anyway?" });
+    expect(dialog).toHaveTextContent(SENTENCE);
+    expect(dialog).toHaveTextContent("Copy paper");
+    expect(dialog).toHaveTextContent("Wellcome");
+    expect(dialog).toHaveTextContent("HKD 1,012.50");
+    expect(props.onAdded).not.toHaveBeenCalled();
+  });
+
+  it("Save anyway sends the same line with confirm_duplicate and adds it", async () => {
+    const sent = saves(DUPLICATE, { line: { id: "new" }, total: 1012.5 });
+    const props = show({ reader: { enabled: false } });
+    await fillAndAdd();
+    await userEvent.click(await screen.findByRole("button", { name: "Save anyway" }));
+    await waitFor(() => expect(props.onAdded).toHaveBeenCalledWith({ id: "new" }, 1012.5));
+    expect(sent).toHaveLength(2);
+    expect(sent[1].path).toBe("/reports/expenses/lines");
+    expect(sent[1].form.get("confirm_duplicate")).toBe("true");
+    expect(sent[1].form.get("amount")).toBe("1012.5");
+    expect(sent[1].form.get("supplier_id")).toBe("s-well");
+    expect((sent[1].form.get("receipt") as File).name).toBe("taxi.png");
+    expect(screen.queryByRole("dialog", { name: "Save it anyway?" })).toBeNull();
+  });
+
+  it("Go back sends nothing more and keeps everything typed", async () => {
+    const sent = saves(DUPLICATE);
+    const props = show({ reader: { enabled: false } });
+    await fillAndAdd();
+    const dialog = await screen.findByRole("dialog", { name: "Save it anyway?" });
+    await userEvent.click(within(dialog).getByRole("button", { name: "Go back" }));
+    expect(screen.queryByRole("dialog", { name: "Save it anyway?" })).toBeNull();
+    expect(sent).toHaveLength(1);
+    expect(amount()).toHaveValue("1,012.50");
+    expect(description()).toHaveValue("Paper");
+    expect(supplier()).toHaveValue("Wellcome");
+    expect(account()).toHaveValue("General Expenses");
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
+    expect(props.onAdded).not.toHaveBeenCalled();
+  });
+
+  it("another 409 (no draft for the day) still goes back to Opening, with no question", async () => {
+    const NO_DRAFT = "Start the day's report first.";
+    saves(new ApiError(409, NO_DRAFT, { error: NO_DRAFT, to: "opening" }));
+    const props = show({ reader: { enabled: false } });
+    await fillAndAdd();
+    await waitFor(() => expect(props.onNoDraft).toHaveBeenCalledWith(NO_DRAFT));
+    expect(screen.queryByRole("dialog", { name: "Save it anyway?" })).toBeNull();
+  });
+
+  it("Edit Expense's Save asks too, and Save anyway sends the changes with confirm_duplicate", async () => {
+    const sent = saves(DUPLICATE, { line: { id: "l1" }, total: 1012.5 });
+    const props = show({ line: LINE, reader: { enabled: false } });
+    await userEvent.clear(amount());
+    await userEvent.type(amount(), "1012.50");
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Save anyway" }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalledWith({ id: "l1" }, 1012.5));
+    expect(sent.map((s) => s.path)).toEqual(["/expense-lines/l1", "/expense-lines/l1"]);
+    expect(Object.fromEntries(sent[1].form.entries())).toEqual({
+      amount: "1012.5",
+      confirm_duplicate: "true",
+    });
   });
 });
 

@@ -31,6 +31,7 @@ import {
   pagerItems,
   pickDay,
   pickedRange,
+  reportHistoryHref,
   shownRange,
   type HistoryFilters,
   type HistoryPage,
@@ -93,7 +94,8 @@ const MENU_ITEM =
  *   expenses). Either is saved under the name the API gives; Flask's "Exporting..." and toast, a
  *   refusal's sentence as a toast. With no dates picked either file is the whole history (`csvRequest`).
  * - "Report Results": a row per day, newest first - the date and its weekday circle, Sales and
- *   Expenses, the badge (a failed publish's reasons on hover or a tap), when and by whom, the ⋮
+ *   Expenses, the badge (a failed publish's ⓘ opens the report's History - PublishHistory.tsx, owner's
+ *   H1 2026-11-19 - where each attempt's issues are), when and by whom, the ⋮
  *   menu (View, Publish / Republish, Edit, Delete - the owner's order, 2026-11-17) and the chevron
  *   (View). Then the pager.
  * - Edit: the latest report, `POST /reports/<id>/reopen` as on a report's view; an older one opens
@@ -572,14 +574,13 @@ function HistoryEntry({
   onPublish: (ask: PublishAsk) => void;
   inApp: InApp;
 }) {
-  const tipId = useId();
   const menuId = useId();
-  // a failed publish's reasons: on hover as in Flask, and on a tap (a phone has no hover)
-  const [tip, setTip] = useState(false);
   const day = dayParts(row.transaction_date);
   const badge = historyBadge(row);
   const look = BADGE_TONE[badge];
-  const reasons = badge === "Publish failed" && row.publish_reasons.length > 0;
+  // a failed publish's ⓘ: the report's History, open, where each attempt's issues are (H1)
+  const failedHistory =
+    badge === "Publish failed" ? reportHistoryHref(entityId, entityName, row.id) : null;
   const draft = row.status === "draft";
   // a draft resumes at its own step of the wizard, in this app
   const view = draft
@@ -640,20 +641,24 @@ function HistoryEntry({
                 down the list (owner, 2026-11-18: a Draft row sat further right). */}
             <div className="flex w-[92px] shrink-0 flex-col min-[414px]:mr-4 min-[414px]:w-[104px] min-[640px]:mr-6 min-[640px]:w-[120px] min-[1024px]:mr-20 min-[1024px]:w-[170px]">
               <div
-                className={`relative ${reasons ? "group cursor-help has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-1 has-[:focus-visible]:outline-flask-focus" : ""} inline-flex w-fit flex-col rounded-flask-lg px-1.5 py-1 min-[414px]:px-2 min-[414px]:py-1.5 min-[640px]:px-3 min-[640px]:py-2 ${look.bg}`}
+                className={`inline-flex w-fit items-center rounded-flask-lg px-1.5 py-1 min-[414px]:px-2 min-[414px]:py-1.5 min-[640px]:px-3 min-[640px]:py-2 ${look.bg}`}
               >
-                {reasons ? (
-                  <button
-                    type="button"
-                    onClick={() => setTip((open) => !open)}
-                    onBlur={() => setTip(false)}
-                    aria-expanded={tip}
-                    aria-describedby={tipId}
-                    className={`inline-flex cursor-help items-center whitespace-nowrap text-[9px] font-medium focus:outline-none min-[414px]:text-[10px] min-[640px]:text-xs ${look.ink}`}
+                <span
+                  className={`inline-flex items-center whitespace-nowrap text-[9px] font-medium min-[414px]:text-[10px] min-[640px]:text-xs ${look.ink}`}
+                >
+                  {badge}
+                </span>
+                {failedHistory ? (
+                  // its 12px mark keeps the pill Flask's size; the tap area reaches 44px around it
+                  <a
+                    href={failedHistory}
+                    onClick={(e) => inApp(e, failedHistory)}
+                    aria-label="See why it didn't publish"
+                    title="See why it didn't publish"
+                    className={`relative ml-1 inline-flex shrink-0 rounded-full before:absolute before:-inset-4 before:content-[''] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-flask-focus ${look.ink}`}
                   >
-                    {badge}
                     <svg
-                      className="ml-1 h-3 w-3 shrink-0"
+                      className="h-3 w-3"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                       aria-hidden="true"
@@ -664,68 +669,7 @@ function HistoryEntry({
                         clipRule="evenodd"
                       />
                     </svg>
-                  </button>
-                ) : (
-                  <span
-                    className={`inline-flex items-center whitespace-nowrap text-[9px] font-medium min-[414px]:text-[10px] min-[640px]:text-xs ${look.ink}`}
-                  >
-                    {badge}
-                  </span>
-                )}
-                {reasons ? (
-                  <div
-                    id={tipId}
-                    role="tooltip"
-                    className={`absolute right-0 top-full z-[60] mt-2 ${tip ? "block" : "hidden"} w-max max-w-[16rem] rounded-flask-lg bg-flask-gray-900 px-3 py-2 text-left text-[11px] font-normal normal-case leading-snug text-flask-white shadow-flask-xl group-hover:block group-has-[:focus-visible]:block min-[640px]:max-w-[18rem]`}
-                  >
-                    <span className="absolute -top-1 right-3 h-2 w-2 rotate-45 bg-flask-gray-900" />
-                    <p className="mb-1 font-semibold">Publish issues:</p>
-                    <ul className="space-y-1 whitespace-normal break-words">
-                      {row.publish_reasons.map((reason, i) => (
-                        <li
-                          key={i}
-                          className={`flex items-start gap-1.5 ${reason.resolved ? "rounded bg-flask-green-500/20 px-1 py-0.5" : ""}`}
-                        >
-                          {reason.resolved ? (
-                            <>
-                              <svg
-                                className="mt-px h-3 w-3 shrink-0 text-flask-green-400"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                role="img"
-                                aria-label="Resolved"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.3 3.3 6.8-6.8a1 1 0 011.4 0z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                              <span className="text-flask-green-300 line-through">
-                                {reason.text}
-                              </span>
-                            </>
-                          ) : (
-                            <>
-                              <svg
-                                className="mt-px h-3 w-3 shrink-0 text-flask-red-400"
-                                fill="currentColor"
-                                viewBox="0 0 20 20"
-                                aria-hidden="true"
-                              >
-                                <path
-                                  fillRule="evenodd"
-                                  d="M10 8.586 5.707 4.293 4.293 5.707 8.586 10l-4.293 4.293 1.414 1.414L10 11.414l4.293 4.293 1.414-1.414L11.414 10l4.293-4.293-1.414-1.414L10 8.586z"
-                                  clipRule="evenodd"
-                                />
-                              </svg>
-                              <span>{reason.text}</span>
-                            </>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  </a>
                 ) : null}
               </div>
               <div className="mt-0.5 flex min-w-0 flex-col break-words text-[8px] text-flask-gray-600 min-[414px]:mt-1 min-[414px]:text-[9px] min-[640px]:text-[10px] min-[1024px]:text-sm">

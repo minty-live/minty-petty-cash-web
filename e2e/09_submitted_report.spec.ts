@@ -542,7 +542,6 @@ const listWithTheReport = {
       published_at: null,
       created_at: "2026-10-13T01:30:00+00:00",
       was_published: false,
-      publish_reasons: [],
       permissions: { edit: false, delete: false },
     },
   ],

@@ -19,6 +19,8 @@ export type CashFigures = {
   transaction_date: string;
   currency_code: string | null;
   draft: OpeningPage["draft"];
+  /** The version the save carries back (R2; `lib/stepConflict.ts`). Absent from an older API. */
+  edit_version?: number | null;
   opening_balance: number;
   cash_addition: number;
   cash_sales: number;

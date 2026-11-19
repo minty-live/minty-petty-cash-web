@@ -5,6 +5,7 @@ import {
   MAX_POLLS,
   POLL_MS,
   SETTLE_MS,
+  archivedContacts,
   nextProgress,
   partialMessage,
   publishingLabel,
@@ -296,5 +297,43 @@ describe("runPublish", () => {
     const d = run(lapsed.fetcher);
     await vi.advanceTimersByTimeAsync(0);
     expect(d.ends).toEqual([{ kind: "signed-out" }]);
+  });
+});
+
+describe("contacts archived in Xero (C4)", () => {
+  it("reads a 409's archived contacts, and nothing from a body without them", () => {
+    expect(
+      archivedContacts({ error: "x", archived_contacts: [{ id: "c-1", name: "Kee Wah" }] }),
+    ).toEqual([{ id: "c-1", name: "Kee Wah" }]);
+    expect(archivedContacts({ error: "Publishing already in progress. Please wait..." })).toBe(
+      null,
+    );
+    expect(archivedContacts({ archived_contacts: [] })).toBe(null);
+    expect(archivedContacts(null)).toBe(null);
+  });
+
+  it("passes a refused start's archived contacts on", async () => {
+    const body = {
+      error: "Kee Wah is archived in Xero. Restore it in Xero, or map it to another contact now.",
+      archived_contacts: [{ id: "c-1", name: "Kee Wah" }],
+    };
+    const ends: PublishEnd[] = [];
+    runPublish("r-1", {
+      republish: false,
+      fetcher: (() => Promise.reject(new ApiError(409, body.error, body))) as never,
+      onProgress: () => undefined,
+      onEnd: (e) => ends.push(e),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(ends).toEqual([
+      {
+        kind: "refused",
+        status: 409,
+        reconnect: false,
+        message: body.error,
+        archived: [{ id: "c-1", name: "Kee Wah" }],
+      },
+    ]);
   });
 });

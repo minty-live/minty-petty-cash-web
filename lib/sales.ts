@@ -29,6 +29,8 @@ export type SalesPage = {
   currency_code: string | null;
   /** null before Opening made the day's draft. */
   draft: OpeningPage["draft"];
+  /** The version the save carries back (R2; `lib/stepConflict.ts`). Absent from an older API. */
+  edit_version?: number | null;
   /** The company's electronic and delivery methods, in Settings order. */
   methods: SalesMethod[];
   cash_sales: number | null;

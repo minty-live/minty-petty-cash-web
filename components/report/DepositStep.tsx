@@ -9,6 +9,7 @@ import { formatAmount } from "@minty/shared/money";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
@@ -29,6 +30,7 @@ import { parseMoney } from "@/lib/currencyInput";
 import { formatMoney } from "@/lib/money";
 import { datePill } from "@/lib/opening";
 import { changed } from "@/lib/sales";
+import { alreadySavedOf, depositSavedRows } from "@/lib/stepConflict";
 import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP, type WizardStep } from "@/lib/wizardPages";
 
@@ -126,6 +128,7 @@ function DepositForm({
   });
   const [busy, setBusy] = useState<string | null>(null);
   const [negative, setNegative] = useState(page.cash_on_hand < 0);
+  const alreadySaved = useAlreadySaved();
   const field = useRef<HTMLInputElement>(null);
 
   // with the cash on hand already below zero, Fix Negative Balance is the message
@@ -150,13 +153,28 @@ function DepositForm({
     try {
       const answer = await pettyCashFetch<SaveAnswer>("/reports/deposit", {
         method: "PUT",
-        json: { transaction_date: day, bank_deposit: parseMoney(amount), action },
+        json: {
+          transaction_date: day,
+          bank_deposit: parseMoney(amount),
+          action,
+          edit_version: page.edit_version,
+        },
       });
       if (answer.next === "dashboard") router.push(home);
       else go("cash_count");
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
       setBusy(null);
+      const stale = alreadySavedOf<DepositPage>(err);
+      if (stale) {
+        // R2: someone else saved this step first - show what they saved, then go on.
+        alreadySaved.show(
+          stale.sentence,
+          depositSavedRows(stale.saved),
+          stepHref(entityId, entityName, stale.next, day),
+        );
+        return;
+      }
       const sentence = sentenceOf(err) ?? SAVE_FAILED;
       if (toOpening(err)) backToOpening(sentence, day);
       else if (fieldOf(err) === "bank_deposit") {
@@ -179,6 +197,7 @@ function DepositForm({
     <>
       {leave}
       {busy ? <LoadingOverlay text={busy} /> : null}
+      {alreadySaved.dialog}
       {negative ? (
         <FixNegativeBalanceModal
           balance={page.cash_on_hand}

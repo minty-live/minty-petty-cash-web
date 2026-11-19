@@ -1,10 +1,11 @@
 /**
  * Report history: what `GET /reports` answers (Minty `petty_cash_api/routes/history.py`), the
  * page's filters as its address carries them, and the rules Flask's ORIGINAL
- * `report_history/report_history.html` (Minty `1c25b35^1`) draws a row and its pager by.
+ * `report_history/report_history.html` (Minty `1c25b35^1`) draws a row and its pager by. Also a
+ * report's own publish History (`GET /reports/<id>/history`, components/report/PublishHistory.tsx).
  */
 
-import { pettyCashHome } from "@/lib/companyPages";
+import { pettyCashHome, reportHref } from "@/lib/companyPages";
 import { formatDay } from "@/lib/dates";
 import { formatMoney, NO_CURRENCY_NOTE } from "@/lib/money";
 import { sectionStep, type WizardStep } from "@/lib/wizardPages";
@@ -32,7 +33,6 @@ export type HistoryRow = {
   was_published: boolean;
   /** Its entries are recorded for the company's Xero organisation: a delete takes them out (2026-11-17). */
   xero_removable: boolean;
-  publish_reasons: { text: string; resolved: boolean }[];
   /**
    * `edit`: reopen (the latest report only). `edit_details`: the report view's Edit Details - what
    * moves no balance, on any submitted report not being published.
@@ -210,11 +210,44 @@ export function historyStamp(row: HistoryRow): string {
       : row.status === "submitted"
         ? (row.submitted_at ?? row.created_at)
         : row.created_at;
+  return hkStamp(when);
+}
+
+/** A moment as Flask's "13 Oct 2026 20:05" in Hong Kong time; "" for none or a bad one. */
+export function hkStamp(when: string | null): string {
   if (!when) return "";
   const moment = new Date(when);
   if (Number.isNaN(moment.getTime())) return "";
   const p = Object.fromEntries(HK_STAMP.formatToParts(moment).map((x) => [x.type, x.value]));
   return `${p.day} ${p.month} ${p.year} ${p.hour}:${p.minute}`;
+}
+
+/**
+ * One publish attempt on a report's History (`GET /reports/<id>/history`, petty-cash-api; owner's
+ * H1, 2026-11-19). `resolved` is the re-check of the newest failed attempt (true fixed, false still
+ * open); null on an older attempt, which is not checked again.
+ */
+export type PublishAttempt = {
+  at: string | null;
+  user_name: string | null;
+  action: "published" | "publish_failed";
+  details: { text: string; resolved: boolean | null }[];
+};
+
+/** `GET /reports/<id>/history`: every publish attempt, newest first. */
+export type PublishHistory = { history: PublishAttempt[] };
+
+/** The History section's anchor on a report's view: report history's ⓘ opens it there. */
+export const HISTORY_ANCHOR = "history";
+
+/** A report's view at its History section, open: `.../reports/<id>/summary#history`. */
+export function reportHistoryHref(entityId: string, entityName: string, reportId: string): string {
+  return `${reportHref(entityId, entityName, reportId, "summary")}#${HISTORY_ANCHOR}`;
+}
+
+/** The attempt's pill: Published (success) or Publish failed (danger), as the report's badge. */
+export function attemptLabel(attempt: PublishAttempt): "Published" | "Publish failed" {
+  return attempt.action === "published" ? "Published" : "Publish failed";
 }
 
 /**

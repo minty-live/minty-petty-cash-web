@@ -28,6 +28,9 @@ export type ExpensesPage = {
   transaction_date: string;
   currency_code: string | null;
   draft: OpeningPage["draft"];
+  /** The version the step's save carries back (R2; `lib/stepConflict.ts`); lines never carry it.
+   * Absent from an older API. */
+  edit_version?: number | null;
   lines: ExpenseLine[];
   total: number;
   /** The company's synced Xero contacts, A to Z. */

@@ -22,10 +22,12 @@ import {
   SuggestedLine,
   useReceiptReader,
 } from "@/components/report/ReceiptReader";
+import { DuplicateDialog } from "@/components/report/DuplicateDialog";
 import { ReceiptViewer, type ShownReceipt } from "@/components/report/ReceiptViewer";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { parseMoney } from "@/lib/currencyInput";
+import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/duplicates";
 import {
   cleared,
   edited,
@@ -149,6 +151,10 @@ export type AddExpenseProps = {
  * line, its receipt named in the drop zone. Save sends only what changed as one multipart
  * `PATCH /expense-lines/{id}` (a picked file replaces the line's receipt); nothing changed just
  * closes it.
+ *
+ * Either save may come back as DUP1's 409 (another line of the day with the same supplier and
+ * amount; `lib/duplicates.ts`): `DuplicateDialog` asks, Go back keeps the card as typed, and Save
+ * anyway sends the same form again with `confirm_duplicate=true`.
  */
 export function AddExpenseCard(props: AddExpenseProps) {
   const {
@@ -257,6 +263,11 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const newContactMessage = newContact === null ? null : newContactProblem(newContact);
   const [errors, setErrors] = useState<Set<RequiredField>>(new Set());
   const [sending, setSending] = useState(false);
+  // DUP1: the API found a line like this one; the question is open until Go back or Save anyway
+  const [duplicate, setDuplicate] = useState<{
+    warning: DuplicateWarning;
+    again: () => void;
+  } | null>(null);
 
   // Flask scrolls the card into view as it opens.
   useEffect(() => {
@@ -388,6 +399,25 @@ export function AddExpenseCard(props: AddExpenseProps) {
     if (converted)
       for (const [name, value] of Object.entries(exchangeFields(converted)))
         form.append(name, value);
+    await sendNew(form);
+  }
+
+  /** DUP1's 409 (`lib/duplicates.ts`): ask, and Save anyway sends `form` again with the flag. */
+  function askDuplicate(err: unknown, form: FormData, send: (form: FormData) => Promise<void>) {
+    const warning = duplicatesOf(err);
+    if (!warning) return false;
+    setDuplicate({
+      warning,
+      again: () => {
+        form.set(CONFIRM_DUPLICATE, "true");
+        void send(form);
+      },
+    });
+    return true;
+  }
+
+  /** Add's multipart `POST /reports/expenses/lines`. */
+  async function sendNew(form: FormData) {
     setSending(true);
     setBusy("Saving...");
     try {
@@ -402,6 +432,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
       setBusy(null);
       setSending(false);
       if (err instanceof ApiError && err.status === 401) return;
+      if (askDuplicate(err, form, sendNew)) return;
       const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
       if (body?.to === "opening") {
         onNoDraft(err instanceof ApiError ? err.message : ADD_FAILED);
@@ -427,6 +458,11 @@ export function AddExpenseCard(props: AddExpenseProps) {
       for (const [name, value] of Object.entries(exchangeFields(converted)))
         form.append(name, value);
     }
+    await sendEdit(saved, form);
+  }
+
+  /** Edit Expense's multipart `PATCH /expense-lines/{id}`. */
+  async function sendEdit(saved: ExpenseLine, form: FormData) {
     setSending(true);
     setBusy("Saving...");
     try {
@@ -441,6 +477,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
       setBusy(null);
       setSending(false);
       if (err instanceof ApiError && err.status === 401) return;
+      if (askDuplicate(err, form, (again) => sendEdit(saved, again))) return;
       const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
       if (body?.to === "opening") {
         onNoDraft(err instanceof ApiError ? err.message : EDIT_FAILED);
@@ -711,6 +748,18 @@ export function AddExpenseCard(props: AddExpenseProps) {
           <span>{editing ? "Save" : "Add"}</span>
         </button>
       </div>
+      {/* portalled to <body>: outside the form in the page, so it never submits it */}
+      {duplicate ? (
+        <DuplicateDialog
+          warning={duplicate.warning}
+          code={code}
+          onSaveAnyway={() => {
+            setDuplicate(null);
+            duplicate.again();
+          }}
+          onBack={() => setDuplicate(null)}
+        />
+      ) : null}
     </form>
   );
 }

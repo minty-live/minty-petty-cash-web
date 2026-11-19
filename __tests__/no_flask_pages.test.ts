@@ -44,6 +44,10 @@ const ALLOWED: Record<string, { pattern: RegExp; why: string }[]> = {
     },
     { pattern: /^ACCOUNTS_API_URL\}\/logout`/, why: "ends the session" },
     {
+      pattern: /^ACCOUNTS_API_URL\}\/\?\$\{new URLSearchParams\(\{ next: back\.pathname/,
+      why: "the front door after the session expired: redirects to minty-web's sign-in page (2026-11-19)",
+    },
+    {
       pattern: /^ACCOUNTS_API_URL;$/,
       why: "accounts-api's base, where /landing swaps its one-time code (gap 4) - a JSON API",
     },

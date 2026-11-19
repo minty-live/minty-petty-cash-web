@@ -16,6 +16,11 @@ export type OpeningPage = {
     xero_integrated: boolean;
     publishing_status: string | null;
   } | null;
+  /**
+   * The version the save carries back (owner's decisions doc R1/R2, 2026-11-19; `lib/stepConflict.ts`):
+   * null when the day had no report yet. Absent from an older API.
+   */
+  edit_version?: number | null;
   /** Yesterday's closing, else the draft's own (onboarding-seeded) opening, else 0. */
   starting_cash_balance: number;
   yesterday_closing_balance: number;

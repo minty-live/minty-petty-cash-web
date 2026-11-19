@@ -9,6 +9,7 @@ import { formatAmount } from "@minty/shared/money";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
+import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { LoadingOverlay, ReportBadge } from "@/components/report/ReportChrome";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { entityAcronym } from "@/lib/acronym";
@@ -26,6 +27,7 @@ import {
   type SalesMethod,
   type SalesPage,
 } from "@/lib/sales";
+import { alreadySavedOf, salesSavedRows } from "@/lib/stepConflict";
 import { useAuth } from "@/lib/useAuth";
 import { stepHref, WIZARD_BACK_SKIP } from "@/lib/wizardPages";
 
@@ -114,6 +116,7 @@ function SalesForm({
   const [values, setValues] = useState(initial.values);
   const [cash, setCash] = useState(initial.cash);
   const [saving, setSaving] = useState(false);
+  const alreadySaved = useAlreadySaved();
 
   const code = page.currency_code;
   const day = page.transaction_date;
@@ -151,6 +154,7 @@ function SalesForm({
           cash_sales: parts.cash ? parseMoney(cash) : 0,
           amounts,
           action,
+          edit_version: page.edit_version,
         },
       });
       if (answer.next === "dashboard") {
@@ -160,6 +164,17 @@ function SalesForm({
       router.push(stepHref(entityId, entityName, "expenses", answer.transaction_date));
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
+      const stale = alreadySavedOf<SalesPage>(err);
+      if (stale) {
+        // R2: someone else saved this step first - show what they saved, then go on.
+        setSaving(false);
+        alreadySaved.show(
+          stale.sentence,
+          salesSavedRows(stale.saved),
+          stepHref(entityId, entityName, stale.next, day),
+        );
+        return;
+      }
       const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
       const message =
         err instanceof ApiError ? err.message : "I couldn't save that. Mind trying again?";
@@ -205,6 +220,7 @@ function SalesForm({
         <>
           {leave}
           {saving ? <LoadingOverlay /> : null}
+          {alreadySaved.dialog}
         </>
       }
     >

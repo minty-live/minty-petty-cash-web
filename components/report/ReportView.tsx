@@ -25,6 +25,7 @@ import {
   useUnsavedEdits,
   WithdrawalCard,
 } from "@/components/report/ReportEdits";
+import { PublishHistory } from "@/components/report/PublishHistory";
 import { ReportSummary } from "@/components/report/ReportSummary";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
@@ -71,6 +72,9 @@ const ICON_GROW = "transition-transform duration-300 group-hover:scale-[1.2]";
  *   On a report that has been to Xero the mode opens with the amber "This report is in Xero." note.
  *   `editDetails` (report history's Edit Details, `?edit=details`) opens the page in the mode; the
  *   address then drops it, so a reload opens the plain view.
+ *
+ * - History (PublishHistory.tsx, owner's H1 2026-11-19): under the buttons, every publish attempt
+ *   with its issues; `#history` (report history's ⓘ) opens it.
  *
  * Every refusal shows the API's sentence and keeps the page.
  */
@@ -373,6 +377,8 @@ function ReportViewBody({
           <span>Close</span>
         </button>
       ) : null}
+
+      <PublishHistory reportId={report.report_id} />
     </PhoneCard>
   );
 }

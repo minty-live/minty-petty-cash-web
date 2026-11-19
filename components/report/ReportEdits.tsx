@@ -5,10 +5,12 @@ import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNod
 import { guardLeave, useLeaveGuard } from "@minty/shared/leaveGuard";
 
 import { useToast } from "@/components/flask/Toasts";
+import { DuplicateDialog } from "@/components/report/DuplicateDialog";
 import { ExpenseDetailsModal, ExpenseRow } from "@/components/report/ExpensesStep";
 import { LeaveDialog } from "@/components/ui/LeaveDialog";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
+import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/duplicates";
 import { uploadName, type Account, type Supplier } from "@/lib/expenses";
 import { formatMoney } from "@/lib/money";
 import {
@@ -388,7 +390,9 @@ function withCurrent<T extends { id: string }>(list: T[], current: T | null): T[
  * `options`), Receipt/Document ("Click to change files", one PDF, JPEG or PNG of 10 MB at most,
  * checked before it is sent) and "Save changes". Only what changed is sent. Escape or a click
  * outside keeps an editor with changes open (Flask's toast); Close with changes asks "Leave without
- * saving?" (owner, 2026-11-17; Flask's discarded them).
+ * saving?" (owner, 2026-11-17; Flask's discarded them). A changed supplier that makes the line look
+ * like another of the day is DUP1's 409: `DuplicateDialog` asks, and Save anyway resends the same
+ * changes with `confirm_duplicate=true`.
  */
 export function LineEditor({
   report,
@@ -417,6 +421,9 @@ export function LineEditor({
   const [receiptRefused, setReceiptRefused] = useState<string | null>(null);
   const [refused, setRefused] = useState<{ field: LineField; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [duplicate, setDuplicate] = useState<{ warning: DuplicateWarning; form: FormData } | null>(
+    null,
+  );
 
   const changes = lineChanges(line, { description, supplierId, accountId, receipt });
   const dirty = Object.keys(changes).length > 0;
@@ -463,6 +470,10 @@ export function LineEditor({
     if (changes.supplier_id) form.append("supplier_id", changes.supplier_id);
     if (changes.account_id) form.append("account_id", changes.account_id);
     if (changes.receipt) form.append("receipt", changes.receipt, changes.receipt.name);
+    await send(form);
+  }
+
+  async function send(form: FormData) {
     setSaving(true);
     setRefused(null);
     try {
@@ -475,6 +486,12 @@ export function LineEditor({
       onClose();
     } catch (err) {
       if (err instanceof ApiError && err.status === 401) return;
+      // DUP1: a changed supplier makes it look like another line of the day - ask (lib/duplicates.ts)
+      const warning = duplicatesOf(err);
+      if (warning) {
+        setDuplicate({ warning, form });
+        return;
+      }
       const message = refusalOf(err);
       const field = err instanceof ApiError ? fieldOf(message) : "form";
       setRefused({ field, message });
@@ -621,13 +638,27 @@ export function LineEditor({
   );
 
   return (
-    <ExpenseDetailsModal
-      line={line}
-      code={report.currency_code}
-      // Close with changes asks "Leave without saving?" (owner, 2026-11-17; Flask discarded them)
-      onClose={() => guardLeave(onClose)}
-      onDismiss={dismiss}
-      editor={editor}
-    />
+    <>
+      <ExpenseDetailsModal
+        line={line}
+        code={report.currency_code}
+        // Close with changes asks "Leave without saving?" (owner, 2026-11-17; Flask discarded them)
+        onClose={() => guardLeave(onClose)}
+        onDismiss={dismiss}
+        editor={editor}
+      />
+      {duplicate ? (
+        <DuplicateDialog
+          warning={duplicate.warning}
+          code={report.currency_code}
+          onSaveAnyway={() => {
+            setDuplicate(null);
+            duplicate.form.set(CONFIRM_DUPLICATE, "true");
+            void send(duplicate.form);
+          }}
+          onBack={() => setDuplicate(null)}
+        />
+      ) : null}
+    </>
   );
 }
