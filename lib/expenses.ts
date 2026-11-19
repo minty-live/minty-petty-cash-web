@@ -5,6 +5,7 @@
  * Expense Details rows.
  */
 
+import type { ReaderStatus } from "@minty/shared/reader";
 import { parseMoney } from "@/lib/currencyInput";
 import type { OpeningPage } from "@/lib/opening";
 
@@ -34,8 +35,12 @@ export type ExpensesPage = {
   /** The accounts switched on for Petty Cash, in the API's order. */
   accounts: Account[];
   permissions: { create_supplier: boolean };
-  /** Whether "Read the receipt" is offered (`EXPENSE_AI_ENABLED`); absent from an older API = off. */
-  reader?: { enabled: boolean };
+  /**
+   * Whether "Read receipt" is offered (`EXPENSE_AI_ENABLED` and a usable `ai_policy`), and the
+   * company's AI allowance left - one allowance with Payment Request (owner, 2026-11-18). Absent from an
+   * older API = off; an older API's `{enabled}` alone = on, with no count shown.
+   */
+  reader?: ReaderStatus;
 };
 
 /**

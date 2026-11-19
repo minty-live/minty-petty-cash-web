@@ -825,8 +825,8 @@ const SUGGESTIONS = {
 
 const attachReceipt = (page: Page, name = "taxi.png") =>
   page.getByTestId("expense_files").setInputFiles({ name, mimeType: "image/png", buffer: PNG });
-/** "Read the receipt": the only way a receipt is read (owner, 2026-11-18). */
-const readButton = (page: Page) => page.getByRole("button", { name: "Read the receipt" });
+/** "Read receipt": the only way a receipt is read (owner, 2026-11-18). */
+const readButton = (page: Page) => page.getByRole("button", { name: "Read receipt" });
 
 test("the receipt reader: Flask's reading box, then suggestions in the empty fields, marked - nothing saved until Add", async ({
   page,
@@ -1011,4 +1011,54 @@ test("the page reloads with no console error", async ({ page }) => {
     page.getByRole("dialog", { name: "Expense Details" }).getByRole("img", { name: "milk.png" }),
   ).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+test("Read receipt shows the company's AI allowance left, and once it is used up it is disabled with the reason", async ({
+  page,
+}) => {
+  const reads: string[] = [];
+  const open = {
+    enabled: true,
+    reads_used: null,
+    reads_limit: null,
+    reads_left: null,
+    percent_left: 80,
+    blocked: false,
+    resumes_at: null,
+  };
+  await openWith(page, expensesAnswer({ reader: open }), {
+    onExtract: async (req, route) => {
+      reads.push(req.postData() ?? "");
+      await route.fulfill({
+        json: {
+          suggestions: SUGGESTIONS,
+          reason: null,
+          reader: { ...open, percent_left: 0, blocked: true },
+        },
+      });
+    },
+  });
+  await page.getByRole("button", { name: "Add New Expense" }).click();
+  await attachReceipt(page);
+  await expect(readButton(page)).toBeEnabled();
+  await expect(readButton(page)).toHaveAccessibleDescription("80% of your AI allowance left");
+  await page.screenshot({
+    path: `test-results/ai-reads-left-${page.viewportSize()?.width}.png`,
+    fullPage: true,
+  });
+
+  await readButton(page).click();
+  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
+  // the read used the last one: the count stays, saying why there are no more
+  const usedUp = "Your company has used its AI allowance. Fill in the details yourself.";
+  await expect(page.getByText(usedUp)).toBeVisible();
+  // a new receipt offers the button again, disabled, its reason beside it
+  await attachReceipt(page, "second.png");
+  await expect(readButton(page)).toBeDisabled();
+  await expect(readButton(page)).toHaveAccessibleDescription(usedUp);
+  expect(reads).toHaveLength(1);
+  await page.screenshot({
+    path: `test-results/ai-reads-used-up-${page.viewportSize()?.width}.png`,
+    fullPage: true,
+  });
 });

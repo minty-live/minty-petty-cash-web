@@ -79,6 +79,17 @@ function api(...extract: Answer[]) {
   return { reads, adds, suppliers, edits };
 }
 
+/** The company's AI reads (owner, 2026-11-18): one allowance with Payment Request. */
+const OPEN = {
+  enabled: true,
+  reads_used: null,
+  reads_limit: null,
+  reads_left: null,
+  percent_left: 80,
+  blocked: false,
+  resumes_at: null,
+};
+
 function show(over: Partial<AddExpenseProps> = {}) {
   const props: AddExpenseProps = {
     day: "2026-10-13",
@@ -86,7 +97,8 @@ function show(over: Partial<AddExpenseProps> = {}) {
     suppliers: SUPPLIERS,
     accounts: ACCOUNTS,
     canCreateSupplier: true,
-    readerEnabled: true,
+    reader: OPEN,
+    onReaderStatus: vi.fn(),
     onSupplierCreated: vi.fn(),
     onAdded: vi.fn(),
     onSaved: vi.fn(),
@@ -105,10 +117,10 @@ function show(over: Partial<AddExpenseProps> = {}) {
 
 const png = (name = "taxi.png") => new File(["png"], name, { type: "image/png" });
 const attach = (file: File) => userEvent.upload(screen.getByTestId("expense_files"), file);
-/** Picks a receipt and presses "Read the receipt" (the only way it is read, owner 2026-11-18). */
+/** Picks a receipt and presses "Read receipt" (the only way it is read, owner 2026-11-18). */
 async function attachAndRead(file: File) {
   await attach(file);
-  await userEvent.click(screen.getByRole("button", { name: "Read the receipt" }));
+  await userEvent.click(screen.getByRole("button", { name: "Read receipt" }));
 }
 const amount = () => screen.getByRole("textbox", { name: /Expense Amount/ });
 const description = () => screen.getByRole("textbox", { name: "Description" });
@@ -130,28 +142,61 @@ const READER_OFF_ANSWER = { suggestions: null, reason: "disabled" };
 // Owner, 2026-11-04: a started read that fails says so in one quiet line (it used to say nothing).
 const FAILED = "I couldn't read this receipt. Enter the details yourself.";
 
+describe("the company's AI allowance beside Read receipt", () => {
+  it("shows how much of the allowance is left beside the button", async () => {
+    api({ suggestions: SUGGESTIONS, reason: null });
+    show();
+    await attach(png());
+    const button = screen.getByRole("button", { name: "Read receipt" });
+    expect(button).toBeEnabled();
+    expect(button).toHaveAccessibleDescription("80% of your AI allowance left");
+  });
+
+  it("used up: the button is disabled with the reason beside it, and nothing is read", async () => {
+    const calls = api({ suggestions: SUGGESTIONS, reason: null });
+    show({ reader: { ...OPEN, percent_left: 0, blocked: true } });
+    await attach(png());
+    const button = screen.getByRole("button", { name: "Read receipt" });
+    expect(button).toBeDisabled();
+    expect(
+      screen.getByText("Your company has used its AI allowance. Fill in the details yourself."),
+    ).toBeInTheDocument();
+    await userEvent.click(button);
+    expect(calls.reads).toHaveLength(0);
+  });
+
+  it("hands each read's new allowance to the page, and a used-up answer is not a failure", async () => {
+    const after = { ...OPEN, percent_left: 0, blocked: true };
+    api({ suggestions: null, reason: "limit_reached", reader: after });
+    const props = show();
+    await attachAndRead(png());
+    await waitFor(() => expect(props.onReaderStatus).toHaveBeenCalledWith(after));
+    expect(screen.queryByText(FAILED)).toBeNull();
+  });
+});
+
 describe("the receipt reader in Add New Expense", () => {
-  // Owner, 2026-11-18: a receipt is read only when the person presses "Read the receipt".
+  // Owner, 2026-11-18: a receipt is read only when the person presses "Read receipt".
   it("picking a receipt reads nothing; the button offers it, and pressing it reads once", async () => {
     const calls = api({ suggestions: SUGGESTIONS, reason: null });
     show();
     await attach(png());
-    const button = screen.getByRole("button", { name: "Read the receipt" });
+    const button = screen.getByRole("button", { name: "Read receipt" });
     expect(button).toHaveAttribute("type", "button");
     expect(calls.reads).toHaveLength(0);
     expect(amount()).toHaveValue("");
     await userEvent.click(button);
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(calls.reads).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
   });
 
   it("no receipt, or the reader switched off on the API, shows no button", async () => {
     api({ suggestions: SUGGESTIONS, reason: null });
-    show({ readerEnabled: false });
-    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+    show({ reader: { enabled: false } });
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
     await attach(png());
-    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
   });
 
   it("a failed read brings the button back, and pressing it tries again", async () => {
@@ -162,7 +207,7 @@ describe("the receipt reader in Add New Expense", () => {
     show();
     await attachAndRead(png());
     expect(await screen.findByText(FAILED)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Read the receipt" }));
+    await userEvent.click(screen.getByRole("button", { name: "Read receipt" }));
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(calls.reads).toHaveLength(2);
   });
@@ -288,7 +333,7 @@ describe("the receipt reader in Add New Expense", () => {
     await attachAndRead(png("one.png"));
     await waitFor(() => expect(calls.reads).toHaveLength(1));
     await attach(png("two.png"));
-    expect(screen.queryByRole("button", { name: "Read the receipt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
     expect(calls.reads).toHaveLength(1);
     expect(screen.queryByText("Reading the receipt…")).toBeNull();
     expect(amount()).toHaveValue("");

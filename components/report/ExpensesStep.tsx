@@ -123,6 +123,8 @@ function ExpensesForm({
   const [lines, setLines] = useState<ExpenseLine[]>(page.lines);
   const [total, setTotal] = useState(page.total);
   const [suppliers, setSuppliers] = useState<Supplier[]>(page.suppliers);
+  // the receipt reader and the company's AI reads left: the page's, then each read's answer
+  const [reader, setReader] = useState(page.reader ?? null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<ExpenseLine | null>(null);
   // one card at a time: Add New Expense or Edit Expense
@@ -286,7 +288,8 @@ function ExpensesForm({
             suppliers={suppliers}
             accounts={page.accounts}
             canCreateSupplier={page.permissions.create_supplier}
-            readerEnabled={page.reader?.enabled === true}
+            reader={reader}
+            onReaderStatus={setReader}
             onSupplierCreated={(s) =>
               setSuppliers((all) => (all.some((x) => x.id === s.id) ? all : [...all, s]))
             }
@@ -309,7 +312,8 @@ function ExpensesForm({
             suppliers={suppliers}
             accounts={page.accounts}
             canCreateSupplier={page.permissions.create_supplier}
-            readerEnabled={page.reader?.enabled === true}
+            reader={reader}
+            onReaderStatus={setReader}
             onSupplierCreated={(s) =>
               setSuppliers((all) => (all.some((x) => x.id === s.id) ? all : [...all, s]))
             }

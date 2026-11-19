@@ -55,6 +55,7 @@ import {
   type Supplier,
 } from "@/lib/expenses";
 import { descriptionProblem } from "@/lib/report";
+import type { ReaderStatus } from "@minty/shared/reader";
 
 const FIELD =
   "w-full rounded-flask-2xl border bg-flask-white py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus cursor-pointer";
@@ -100,8 +101,13 @@ export type AddExpenseProps = {
   suppliers: Supplier[];
   accounts: Account[];
   canCreateSupplier: boolean;
-  /** The receipt reader is switched on: a picked receipt offers "Read the receipt". */
-  readerEnabled: boolean;
+  /**
+   * The receipt reader's status (the page's `reader`, then each read's): switched on, a picked
+   * receipt offers "Read receipt" with the company's AI allowance left; used up, the button is disabled.
+   */
+  reader: ReaderStatus | null;
+  /** A read's answer carried the company's new allowance: the page keeps it for every card. */
+  onReaderStatus: (status: ReaderStatus) => void;
   /** A supplier made here, for the page's list (Flask pushes it onto `allContacts`). */
   onSupplierCreated: (supplier: Supplier) => void;
   onAdded: (line: ExpenseLine, total: number) => void;
@@ -126,7 +132,7 @@ export type AddExpenseProps = {
  * as one multipart `POST /reports/expenses/lines`; the server checks it all again.
  *
  * A picked receipt can be read (components/report/ReceiptReader.tsx, `POST /reports/expenses/extract`)
- * - only when the person presses "Read the receipt", never on picking it (owner, 2026-11-18): its
+ * - only when the person presses "Read receipt", never on picking it (owner, 2026-11-18): its
  * suggestions fill only empty fields, ringed and marked, and the card never waits for it.
  *
  * With `line` it is "Edit Expense" (owner, 2026-11-16): the same card filled in from a saved draft
@@ -141,7 +147,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
     suppliers,
     accounts,
     canCreateSupplier,
-    readerEnabled,
+    reader: readerStatus,
+    onReaderStatus,
     onSupplierCreated,
     onAdded,
     line = null,
@@ -186,17 +193,17 @@ export function AddExpenseCard(props: AddExpenseProps) {
     entryRef.current = next;
     setEntry(next);
     return showedAnything(next);
-  });
+  }, onReaderStatus);
   // the receipt and an object URL of it, made when it is picked and let go when it is replaced
   const [picked, setPicked] = useState<Picked | null>(null);
   const pickedRef = useRef<Picked | null>(null);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
-  // "Read the receipt" was pressed for this receipt: the button goes, and comes back after a failed read
+  // "Read receipt" was pressed for this receipt: the button goes, and comes back after a failed read
   const [readAsked, setReadAsked] = useState(false);
   // (and never once a `disabled` answer has switched the reader off for the session)
   const offerRead =
-    readerEnabled &&
+    readerStatus?.enabled === true &&
     file !== null &&
     !reader.reading &&
     (!readAsked || reader.failed) &&
@@ -426,7 +433,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setPicked(next);
           // the old receipt's suggestions go with it; what the person typed stays
           setEntry(withoutSuggestions);
-          // read only on "Read the receipt" (owner, 2026-11-18)
+          // read only on "Read receipt" (owner, 2026-11-18)
           reader.cancel();
           setReadAsked(false);
           if (f) clearError("file");
@@ -434,8 +441,10 @@ export function AddExpenseCard(props: AddExpenseProps) {
       >
         {reader.reading ? <ReadingNotice /> : null}
         {reader.failed && !reader.reading ? <ReadFailed /> : null}
-        {offerRead ? (
+        {readerStatus?.enabled === true && file !== null && !readerOff() ? (
           <ReadReceiptButton
+            status={readerStatus}
+            offer={offerRead}
             onRead={() => {
               setReadAsked(true);
               void reader.read(file);

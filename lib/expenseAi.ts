@@ -4,7 +4,9 @@
  * card's state, so the card only draws what this says. Flask's `static/js/expense_ai.js` (the
  * classic page, Minty `351e942`) is the behaviour and the wording being ported:
  *
- *   Offered      a receipt is attached, reader on       -> "Read the receipt" (owner, 2026-11-18: never read on attaching)
+ *   Offered      a receipt is attached, reader on       -> "Read receipt" (owner, 2026-11-18: never read on attaching),
+ *                                                          with the company's AI allowance left beside it; used up ->
+ *                                                          the button disabled and the reason beside it
  *   Reading      the person pressed it                  -> "Reading the receipt…"; the card stays usable
  *   Suggested    a value came back with `applied: true` -> filled in empty fields only, ringed, with
  *                "Amount suggested" ("... suggested — please check" for the medium band) and Clear
@@ -149,7 +151,7 @@ export const CLEAR_LABEL = "Clear the suggested value for this field";
 export const USE_LABEL = "Use the value from the receipt";
 
 /** The press that reads the receipt (owner, 2026-11-18). */
-export const READ_LABEL = "Read the receipt";
+export const READ_LABEL = "Read receipt";
 
 /** The reading notice (Flask's words). */
 export const READING_TITLE = "Reading the receipt…";

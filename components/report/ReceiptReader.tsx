@@ -6,7 +6,8 @@
  * and the pieces the card draws around its fields - the teal "Reading the receipt…" box under the
  * drop zone, the line under a suggested field with Clear, the grey note offering the receipt's
  * different reading, (owner, 2026-11-04) one quiet line when a started read fails, and (owner,
- * 2026-11-18) the "Read the receipt" press - a receipt is read only on it, never on picking it. The rules
+ * 2026-11-18) the "Read receipt" press - a receipt is read only on it, never on picking it - with the
+ * company's AI allowance left beside it (shared with Payment Request). The rules
  * are lib/expenseAi.ts; the read and the pieces are `@minty/shared/reader`, shared with Payment
  * Request's invoice reader, here with this card's words.
  *
@@ -15,12 +16,14 @@
  */
 
 import {
+  AllowanceNote,
   ReadButton,
   ReaderNote,
   ReadFailedLine,
   ReadingNotice as SharedReadingNotice,
   SuggestedLine as SharedSuggestedLine,
   useDocumentReader,
+  type ReaderStatus,
 } from "@minty/shared/reader";
 
 import { pettyCashFetch } from "@/lib/apiClient";
@@ -48,11 +51,15 @@ export const EXTRACT_PATH = "/reports/expenses/extract";
  * and an answer for a receipt no longer there is dropped. `onSuggestions` returns whether the
  * answer showed anything; nothing shown is the quiet failure line.
  */
-export function useReceiptReader(onSuggestions: (suggestions: Suggestions) => boolean | void) {
+export function useReceiptReader(
+  onSuggestions: (suggestions: Suggestions) => boolean | void,
+  onStatus?: (status: ReaderStatus) => void,
+) {
   return useDocumentReader<Suggestions>({
     field: "receipt",
     latch: RECEIPT_LATCH,
     onSuggestions,
+    onStatus,
     post: (form, signal) =>
       pettyCashFetch<ExtractAnswer>(EXTRACT_PATH, {
         method: "POST",
@@ -63,9 +70,36 @@ export function useReceiptReader(onSuggestions: (suggestions: Suggestions) => bo
   });
 }
 
-/** "Read the receipt": the only way a receipt is read (shown once one is picked and the reader is on). */
-export function ReadReceiptButton({ onRead }: { onRead: () => void }) {
-  return <ReadButton label={READ_LABEL} onClick={onRead} />;
+const ALLOWANCE_ID = "expense_ai_allowance";
+
+/**
+ * "Read receipt": the only way a receipt is read (shown once one is picked and the reader is on),
+ * with the company's AI allowance left beside it ("80% of your AI allowance left"; it stays after the read). Used up: disabled, the reason
+ * beside it (a gated button shows its reason).
+ */
+export function ReadReceiptButton({
+  onRead,
+  status,
+  offer,
+}: {
+  onRead: () => void;
+  status: ReaderStatus | null;
+  /** The button itself (it goes once pressed, until a read fails); the count stays. */
+  offer: boolean;
+}) {
+  return (
+    <div>
+      {offer ? (
+        <ReadButton
+          label={READ_LABEL}
+          onClick={onRead}
+          disabled={!!status?.blocked}
+          describedBy={ALLOWANCE_ID}
+        />
+      ) : null}
+      <AllowanceNote id={ALLOWANCE_ID} status={status} />
+    </div>
+  );
 }
 
 /** While the receipt is read: Flask's teal box (QA found 12px grey text was missed; the wait is seconds). */
