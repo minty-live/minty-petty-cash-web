@@ -38,6 +38,7 @@ import {
   withoutDetectedName as sharedWithoutDetectedName,
   withoutSuggestions as sharedWithoutSuggestions,
   type Band,
+  type Exchange,
   type ReaderSpec,
   type ReaderState,
   type ReadField,
@@ -63,7 +64,18 @@ export type Suggestions = {
   document_date?: ReadField;
   currency?: string;
   entity_currency?: string | null;
+  /** The amount was converted from the receipt's currency (owner, 2026-11-19): how. */
+  exchange?: Exchange;
+  /** No rate for the receipt's currency: the amount came back empty. */
+  exchange_failed?: { currency?: string };
 };
+
+/** No rate for the receipt's currency (owner, 2026-11-19): the amount is the person's to type. */
+export function rateMissingText(currency: string, code: string | null): string {
+  return code
+    ? `I couldn't get an exchange rate for ${currency}. Enter the amount in ${code}.`
+    : `I couldn't get an exchange rate for ${currency}. Enter the amount yourself.`;
+}
 
 /** What the extract route answers: suggestions, or null and a reason code (shown to nobody). */
 export type ExtractAnswer = { suggestions: Suggestions | null; reason: string | null };
@@ -318,6 +330,11 @@ export function withSuggestions(
     parts.push(
       `The receipt names a supplier that is not in your list: ${detectedName}. You can add it as a new supplier.`,
     );
+  if (s.exchange && filled.includes("amount"))
+    parts.push(
+      `The amount was converted from ${s.exchange.original_currency} ${s.exchange.original_amount}.`,
+    );
+  if (s.exchange_failed?.currency) parts.push(rateMissingText(s.exchange_failed.currency, code));
   const date = dateNote(s.document_date, day);
   if (date && parts.length) parts.push(date);
 

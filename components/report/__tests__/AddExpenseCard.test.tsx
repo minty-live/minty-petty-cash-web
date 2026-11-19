@@ -420,6 +420,51 @@ describe("the receipt reader in Add New Expense", () => {
   });
 });
 
+// Owner, 2026-11-19: once a read has filled a field, the caution sits under the fields until the
+// line is saved.
+const CAUTION =
+  "AI suggestions may be inaccurate. Please check every field against the receipt before saving.";
+
+describe("the caution under AI-filled fields", () => {
+  it("shows under the fields once a read fills them, read with Add, and stays while the person edits", async () => {
+    api({ suggestions: SUGGESTIONS, reason: null });
+    show();
+    await attach(png());
+    expect(screen.queryByText(CAUTION)).toBeNull(); // picked, not read
+    await userEvent.click(screen.getByRole("button", { name: "Read receipt" }));
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    const caution = screen.getByText(CAUTION);
+    const add = screen.getByRole("button", { name: "Add" });
+    expect(add).toHaveAccessibleDescription(CAUTION);
+    // under the last field, above the buttons
+    expect(
+      account().compareDocumentPosition(caution) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(caution.compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await userEvent.clear(description());
+    await userEvent.type(description(), "Paper");
+    expect(screen.getByText(CAUTION)).toBeInTheDocument();
+  });
+
+  it("a read that filled nothing shows no caution", async () => {
+    api({ suggestions: null, reason: "timeout" });
+    show();
+    await attachAndRead(png());
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(screen.queryByText(CAUTION)).toBeNull();
+    expect(screen.getByRole("button", { name: "Add" })).not.toHaveAccessibleDescription(CAUTION);
+  });
+
+  it("another receipt takes it away with the old suggestions", async () => {
+    api({ suggestions: SUGGESTIONS, reason: null }, { suggestions: null, reason: "timeout" });
+    show();
+    await attachAndRead(png("one.png"));
+    expect(await screen.findByText(CAUTION)).toBeInTheDocument();
+    await attach(png("two.png"));
+    expect(screen.queryByText(CAUTION)).toBeNull();
+  });
+});
+
 describe("the supplier picker tells the person they can type to add (owner, 2026-11-12)", () => {
   const NOTE = "Type a contact name to add a new contact";
 
@@ -509,5 +554,95 @@ describe("Edit Expense (the add card on a saved draft line)", () => {
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(props.onCancel).toHaveBeenCalled();
     expect(edits).toHaveLength(0);
+  });
+});
+
+// Owner, 2026-11-19: a receipt in another currency comes back converted at Frankfurter's rate.
+const FX_CAUTION =
+  "The exchange rate is a central bank reference rate and may differ from the amount actually charged.";
+const EXCHANGE = {
+  original_currency: "USD",
+  original_amount: "12.34",
+  rate: "7.846",
+  rate_date: "2026-11-13",
+  date_basis: "receipt",
+  source: "Frankfurter",
+  asked_date: "2026-11-15", // a Sunday's receipt: Friday's rate
+};
+const CONVERTED = {
+  suggestions: {
+    ...SUGGESTIONS,
+    amount: { value: "96.82", confidence: 0.97, band: "high", applied: true },
+    currency: "USD",
+    entity_currency: "HKD",
+    exchange: EXCHANGE,
+  },
+  reason: null,
+};
+
+describe("a receipt in another currency", () => {
+  it("asks with the report's day, fills the converted amount, says how, and Add keeps the six details", async () => {
+    const calls = api(CONVERTED);
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(amount()).toHaveValue("96.82"));
+    expect(calls.reads[0].get("transaction_date")).toBe("2026-10-13");
+    expect(amount()).toHaveAccessibleDescription(
+      "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate, the last business day before 15 Nov 2026).",
+    );
+    expect(document.getElementById("expense_ai_caution")).toHaveTextContent(
+      `${CAUTION} ${FX_CAUTION}`,
+    );
+
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(calls.adds).toHaveLength(1));
+    const sent = calls.adds[0];
+    expect(sent.get("amount")).toBe("96.82");
+    expect(
+      Object.fromEntries([...sent.entries()].filter(([k]) => /original|exchange/.test(k))),
+    ).toEqual({
+      original_currency: "USD",
+      original_amount: "12.34",
+      exchange_rate: "7.846",
+      exchange_rate_date: "2026-11-13",
+      exchange_rate_basis: "receipt",
+      exchange_rate_source: "Frankfurter",
+    });
+  });
+
+  it("a person's own amount drops the conversion: no rate sentence, nothing sent about it", async () => {
+    const calls = api(CONVERTED);
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(amount()).toHaveValue("96.82"));
+    await userEvent.clear(amount());
+    await userEvent.type(amount(), "100");
+    expect(screen.getByText(CAUTION)).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(FX_CAUTION.slice(0, 30)))).toBeNull();
+
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(calls.adds).toHaveLength(1));
+    expect(calls.adds[0].get("original_currency")).toBeNull();
+  });
+
+  it("no rate: the amount stays empty and one line says to type it in the company's currency", async () => {
+    api({
+      suggestions: {
+        ...SUGGESTIONS,
+        amount: { value: "", confidence: 0.97, band: "high", applied: false },
+        currency: "TWD",
+        entity_currency: "HKD",
+        exchange_failed: { currency: "TWD" },
+      },
+      reason: null,
+    });
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(description()).toHaveValue("Copy paper"));
+    expect(amount()).toHaveValue("");
+    expect(
+      screen.getByText("I couldn't get an exchange rate for TWD. Enter the amount in HKD."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(new RegExp(FX_CAUTION.slice(0, 30)))).toBeNull();
   });
 });

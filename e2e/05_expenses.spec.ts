@@ -892,6 +892,120 @@ test("the receipt reader: Flask's reading box, then suggestions in the empty fie
   expect(body).toContain('name="receipt"; filename="taxi.png"');
 });
 
+// Owner, 2026-11-19: the caution under the fields once a read filled them, until the line is saved.
+const AI_CAUTION =
+  "AI suggestions may be inaccurate. Please check every field against the receipt before saving.";
+
+for (const size of [
+  { width: 360, height: 740 },
+  { width: 768, height: 1024 },
+  { width: 1440, height: 900 },
+]) {
+  test(`a read that fills the card shows the caution above Add, gone once added (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) =>
+        route.fulfill({ json: { suggestions: SUGGESTIONS, reason: null } }),
+      onAdd: (_req, route) =>
+        route.fulfill({ status: 201, json: { line: { ...LINE, id: "new" }, total: 1283.3 } }),
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page);
+    await expect(page.getByText(AI_CAUTION)).toHaveCount(0);
+    await readButton(page).click();
+    await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
+    const caution = page.getByText(AI_CAUTION);
+    await expect(caution).toBeVisible();
+    const add = page.getByRole("button", { name: "Add", exact: true });
+    await expect(add).toHaveAccessibleDescription(AI_CAUTION);
+    expect((await caution.boundingBox())!.y).toBeLessThan((await add.boundingBox())!.y);
+    await expectNoHorizontalScroll(page);
+    await caution.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-caution-${size.width}.png` });
+    await page.getByRole("textbox", { name: "Description" }).fill("Taxi");
+    await add.click();
+    await expect(toast(page, "Expense added successfully!")).toBeVisible();
+    await expect(page.getByText(AI_CAUTION)).toHaveCount(0);
+  });
+}
+
+// Owner, 2026-11-19: a receipt in another currency comes back converted at Frankfurter's rate.
+const FX_CAUTION =
+  "The exchange rate is a central bank reference rate and may differ from the amount actually charged.";
+
+for (const size of [
+  { width: 360, height: 740 },
+  { width: 768, height: 1024 },
+  { width: 1440, height: 900 },
+]) {
+  test(`a USD receipt fills the converted amount, says how, and Add keeps the rate (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    let read = "";
+    let sent = "";
+    await openWith(page, expensesAnswer(), {
+      onExtract: (req, route) => {
+        read = req.postData() ?? "";
+        return route.fulfill({
+          json: {
+            suggestions: {
+              ...SUGGESTIONS,
+              amount: { value: "96.82", confidence: 0.97, band: "high", applied: true },
+              description: { value: "Taxi", confidence: 0.9, band: "high", applied: true },
+              currency: "USD",
+              entity_currency: "HKD",
+              exchange: {
+                original_currency: "USD",
+                original_amount: "12.34",
+                rate: "7.846",
+                rate_date: "2026-11-13",
+                date_basis: "receipt",
+                source: "Frankfurter",
+              },
+            },
+            reason: null,
+          },
+        });
+      },
+      onAdd: (req, route) => {
+        sent = req.postData() ?? "";
+        return route.fulfill({
+          status: 201,
+          json: { line: { ...LINE, id: "new" }, total: 1283.3 },
+        });
+      },
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page);
+    await readButton(page).click();
+    const amount = page.getByRole("textbox", { name: /Expense Amount/ });
+    await expect(amount).toHaveValue("96.82");
+    expect(read).toContain('name="transaction_date"');
+    await expect(amount).toHaveAccessibleDescription(
+      "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate).",
+    );
+    const caution = page.getByText(FX_CAUTION, { exact: false });
+    await expect(caution).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await amount.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-fx-${size.width}.png` });
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(toast(page, "Expense added successfully!")).toBeVisible();
+    for (const [field, value] of [
+      ["amount", "96.82"],
+      ["original_currency", "USD"],
+      ["exchange_rate", "7.846"],
+      ["exchange_rate_source", "Frankfurter"],
+    ])
+      expect(sent).toContain(`name="${field}"\r\n\r\n${value}\r\n`);
+  });
+}
+
 test("the reader offers a different reading and an unknown supplier, and changes nothing by itself", async ({
   page,
 }) => {

@@ -30,6 +30,7 @@ import {
   cleared,
   edited,
   entryState,
+  rateMissingText,
   readerOff,
   usedNote,
   withoutDetectedName,
@@ -55,7 +56,16 @@ import {
   type Supplier,
 } from "@/lib/expenses";
 import { descriptionProblem } from "@/lib/report";
-import type { ReaderStatus } from "@minty/shared/reader";
+import {
+  AiCaution,
+  convertedText,
+  exchangeFailedOf,
+  exchangeFields,
+  exchangeKept,
+  exchangeOf,
+  type Exchange,
+  type ReaderStatus,
+} from "@minty/shared/reader";
 
 const FIELD =
   "w-full rounded-flask-2xl border bg-flask-white py-3 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus cursor-pointer";
@@ -182,18 +192,38 @@ export function AddExpenseCard(props: AddExpenseProps) {
   useEffect(() => {
     entryRef.current = entry;
   }, [entry]);
-  const reader = useReceiptReader((suggestions) => {
-    const next = withSuggestions(entryRef.current, suggestions, {
-      suppliers,
-      accounts,
-      code,
-      day,
-      canCreateSupplier,
-    });
-    entryRef.current = next;
-    setEntry(next);
-    return showedAnything(next);
-  }, onReaderStatus);
+  // a read filled the card: the owner's caution stays under the fields until the line is saved
+  // (2026-11-19); another receipt takes it away with the old suggestions
+  const [aiFilled, setAiFilled] = useState(false);
+  // a receipt in another currency (owner, 2026-11-19): the read's conversion and the figure it
+  // gave - kept with the line only while the amount still holds that figure - or the currency no
+  // rate was found for
+  const [exchange, setExchange] = useState<{ how: Exchange; converted: string } | null>(null);
+  const [rateMissing, setRateMissing] = useState<string | null>(null);
+  const reader = useReceiptReader(
+    (suggestions) => {
+      const next = withSuggestions(entryRef.current, suggestions, {
+        suppliers,
+        accounts,
+        code,
+        day,
+        canCreateSupplier,
+      });
+      entryRef.current = next;
+      setEntry(next);
+      const how = exchangeOf(suggestions);
+      setExchange(
+        how && suggestions.amount?.value ? { how, converted: suggestions.amount.value } : null,
+      );
+      const missing = exchangeFailedOf(suggestions);
+      setRateMissing(missing);
+      const showed = showedAnything(next) || missing !== null;
+      if (showed) setAiFilled(true);
+      return showed;
+    },
+    onReaderStatus,
+    day,
+  );
   // the receipt and an object URL of it, made when it is picked and let go when it is replaced
   const [picked, setPicked] = useState<Picked | null>(null);
   const pickedRef = useRef<Picked | null>(null);
@@ -255,6 +285,12 @@ export function AddExpenseCard(props: AddExpenseProps) {
     clearError("account");
   }
 
+  // the conversion holds while the amount is still the converted figure
+  const converted = exchange && exchangeKept(amount, exchange.converted) ? exchange.how : null;
+  const convertedDetail = converted
+    ? `${convertedText(converted, code).replace(/^c/, "C")}.`
+    : null;
+
   /** A field holding the reader's suggestion: its ring, the line under it, or the note offering another reading. */
   function readerExtras(field: SuggestedField, inputId: string) {
     const band = entry.marks[field];
@@ -266,6 +302,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
             id={`${inputId}_suggested`}
             field={field}
             band={band}
+            detail={field === "amount" ? convertedDetail : null}
             onClear={() => {
               setEntry((state) => cleared(state, field));
               document.getElementById(inputId)?.focus();
@@ -348,6 +385,9 @@ export function AddExpenseCard(props: AddExpenseProps) {
     form.append("supplier_id", supplier.id);
     form.append("account_id", account.id);
     form.append("receipt", file, file.name);
+    if (converted)
+      for (const [name, value] of Object.entries(exchangeFields(converted)))
+        form.append(name, value);
     setSending(true);
     setBusy("Saving...");
     try {
@@ -381,6 +421,12 @@ export function AddExpenseCard(props: AddExpenseProps) {
     const form = new FormData();
     for (const [name, value] of Object.entries(changes)) form.append(name, value);
     if (newReceipt) form.append("receipt", newReceipt, newReceipt.name);
+    // a new receipt's conversion goes with its amount (a changed amount without it clears the old one)
+    if (converted) {
+      if (!form.has("amount")) form.append("amount", String(parseMoney(amount)));
+      for (const [name, value] of Object.entries(exchangeFields(converted)))
+        form.append(name, value);
+    }
     setSending(true);
     setBusy("Saving...");
     try {
@@ -433,6 +479,9 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setPicked(next);
           // the old receipt's suggestions go with it; what the person typed stays
           setEntry(withoutSuggestions);
+          setAiFilled(false);
+          setExchange(null);
+          setRateMissing(null);
           // read only on "Read receipt" (owner, 2026-11-18)
           reader.cancel();
           setReadAsked(false);
@@ -476,6 +525,11 @@ export function AddExpenseCard(props: AddExpenseProps) {
           />
         </div>
         {readerExtras("amount", "expense_amount")}
+        {rateMissing && !amount.trim() ? (
+          <p role="status" className="mt-1.5 break-words text-sm text-text-secondary">
+            {rateMissingText(rateMissing, code)}
+          </p>
+        ) : null}
       </div>
 
       <div className="mb-4">
@@ -635,6 +689,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
         {readerExtras("account", "expense_account_code")}
       </div>
 
+      {aiFilled ? <AiCaution id={AI_CAUTION_ID} exchange={converted !== null} /> : null}
+
       <div className="flex gap-3">
         <button
           type="button"
@@ -646,13 +702,20 @@ export function AddExpenseCard(props: AddExpenseProps) {
         >
           <span>Cancel</span>
         </button>
-        <button type="submit" disabled={sending} className={FILLED_BUTTON}>
+        <button
+          type="submit"
+          disabled={sending}
+          aria-describedby={aiFilled ? AI_CAUTION_ID : undefined}
+          className={FILLED_BUTTON}
+        >
           <span>{editing ? "Save" : "Add"}</span>
         </button>
       </div>
     </form>
   );
 }
+
+const AI_CAUTION_ID = "expense_ai_caution";
 
 /* ---------- the two dropdowns ---------- */
 

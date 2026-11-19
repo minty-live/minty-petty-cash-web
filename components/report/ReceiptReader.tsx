@@ -54,19 +54,23 @@ export const EXTRACT_PATH = "/reports/expenses/extract";
 export function useReceiptReader(
   onSuggestions: (suggestions: Suggestions) => boolean | void,
   onStatus?: (status: ReaderStatus) => void,
+  /** The report's day: the rate's day when a receipt in another currency has none (owner, 2026-11-19). */
+  day?: string,
 ) {
   return useDocumentReader<Suggestions>({
     field: "receipt",
     latch: RECEIPT_LATCH,
     onSuggestions,
     onStatus,
-    post: (form, signal) =>
-      pettyCashFetch<ExtractAnswer>(EXTRACT_PATH, {
+    post: (form, signal) => {
+      if (day) form.append("transaction_date", day);
+      return pettyCashFetch<ExtractAnswer>(EXTRACT_PATH, {
         method: "POST",
         form,
         signal,
         onUnauthorized: "reject",
-      }),
+      });
+    },
   });
 }
 
@@ -120,17 +124,20 @@ export function SuggestedLine({
   id,
   field,
   band,
+  detail,
   onClear,
 }: {
   id: string;
   field: SuggestedField;
   band: Band;
+  /** A sentence after it: how a receipt's amount in another currency was converted. */
+  detail?: string | null;
   onClear: () => void;
 }) {
   return (
     <SharedSuggestedLine
       id={id}
-      text={suggestedText(field, band)}
+      text={detail ? `${suggestedText(field, band)}. ${detail}` : suggestedText(field, band)}
       clearLabel={CLEAR_LABEL}
       onClear={onClear}
     />
