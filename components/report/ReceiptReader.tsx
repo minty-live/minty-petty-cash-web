@@ -28,8 +28,10 @@ import {
 
 import { pettyCashFetch } from "@/lib/apiClient";
 import {
+  CARD_SLIP,
   CLEAR_LABEL,
   READ_FAILED,
+  REASON_CARD_SLIP,
   READ_LABEL,
   READING_DETAIL,
   READING_TITLE,
@@ -56,22 +58,39 @@ export function useReceiptReader(
   onStatus?: (status: ReaderStatus) => void,
   /** The report's day: the rate's day when a receipt in another currency has none (owner, 2026-11-19). */
   day?: string,
+  /**
+   * A read the API answered but refused to fill, with its reason - a card terminal slip alone
+   * (`card_slip_only`, owner 2026-11-19). Not a failure: the card says why instead.
+   */
+  onRefused?: (reason: string) => void,
 ) {
   return useDocumentReader<Suggestions>({
     field: "receipt",
     latch: RECEIPT_LATCH,
     onSuggestions,
     onStatus,
-    post: (form, signal) => {
+    post: async (form, signal) => {
       if (day) form.append("transaction_date", day);
-      return pettyCashFetch<ExtractAnswer>(EXTRACT_PATH, {
+      const answer = await pettyCashFetch<ExtractAnswer>(EXTRACT_PATH, {
         method: "POST",
         form,
         signal,
         onUnauthorized: "reject",
       });
+      if (!answer?.suggestions && answer?.reason === REASON_CARD_SLIP && !signal?.aborted)
+        onRefused?.(answer.reason);
+      return answer;
     },
   });
+}
+
+/** A card terminal slip alone (owner, 2026-11-19): where the failure line would go. */
+export function CardSlipLine() {
+  return (
+    <p role="status" className="mb-1 mt-3 break-words text-sm text-text-secondary">
+      {CARD_SLIP}
+    </p>
+  );
 }
 
 const ALLOWANCE_ID = "expense_ai_allowance";

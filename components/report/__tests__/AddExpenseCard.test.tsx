@@ -754,3 +754,29 @@ describe("a receipt in another currency", () => {
     expect(screen.queryByText(new RegExp(FX_CAUTION.slice(0, 30)))).toBeNull();
   });
 });
+
+// Owner, 2026-11-19: a card terminal slip alone fills nothing and says why.
+const CARD_SLIP =
+  "A card slip alone is not valid evidence. Please attach a receipt that shows what was bought.";
+
+describe("a card slip alone", () => {
+  it("fills nothing and says why - not the failure line, not the caution", async () => {
+    api({ suggestions: null, reason: "card_slip_only" });
+    show();
+    await attachAndRead(png("slip.png"));
+    expect(await screen.findByText(CARD_SLIP)).toHaveAttribute("role", "status");
+    expect(amount()).toHaveValue("");
+    expect(description()).toHaveValue("");
+    expect(screen.queryByText(FAILED)).toBeNull();
+    expect(screen.queryByText(CAUTION)).toBeNull();
+  });
+
+  it("another receipt takes the sentence away", async () => {
+    api({ suggestions: null, reason: "card_slip_only" });
+    show();
+    await attachAndRead(png("slip.png"));
+    await screen.findByText(CARD_SLIP);
+    await attach(png("receipt.png"));
+    expect(screen.queryByText(CARD_SLIP)).toBeNull();
+  });
+});

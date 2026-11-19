@@ -14,6 +14,7 @@ import { useAmountInput } from "@minty/shared/amountInput";
 
 import { useToast } from "@/components/flask/Toasts";
 import {
+  CardSlipLine,
   ReadFailed,
   ReadingNotice,
   ReadReceiptButton,
@@ -206,6 +207,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
   // rate was found for
   const [exchange, setExchange] = useState<{ how: Exchange; converted: string } | null>(null);
   const [rateMissing, setRateMissing] = useState<string | null>(null);
+  // a card terminal slip alone (owner, 2026-11-19): nothing filled, and the card says why
+  const [cardSlip, setCardSlip] = useState(false);
   const reader = useReceiptReader(
     (suggestions) => {
       const next = withSuggestions(entryRef.current, suggestions, {
@@ -229,6 +232,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
     },
     onReaderStatus,
     day,
+    () => setCardSlip(true),
   );
   // the receipt and an object URL of it, made when it is picked and let go when it is replaced
   const [picked, setPicked] = useState<Picked | null>(null);
@@ -519,6 +523,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setAiFilled(false);
           setExchange(null);
           setRateMissing(null);
+          setCardSlip(false);
           // read only on "Read receipt" (owner, 2026-11-18)
           reader.cancel();
           setReadAsked(false);
@@ -527,11 +532,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
       >
         {reader.reading ? <ReadingNotice /> : null}
         {reader.failed && !reader.reading ? <ReadFailed /> : null}
+        {cardSlip && !reader.reading ? <CardSlipLine /> : null}
         {readerStatus?.enabled === true && file !== null && !readerOff() ? (
           <ReadReceiptButton
             status={readerStatus}
             offer={offerRead}
             onRead={() => {
+              setCardSlip(false);
               setReadAsked(true);
               void reader.read(file);
             }}

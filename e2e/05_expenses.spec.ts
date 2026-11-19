@@ -932,6 +932,30 @@ for (const size of [
   });
 }
 
+// Owner, 2026-11-19: a card terminal slip alone fills nothing and says why.
+test("a card slip alone fills nothing and says why (360px)", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await openWith(page, expensesAnswer(), {
+    onExtract: (_req, route) =>
+      route.fulfill({ json: { suggestions: null, reason: "card_slip_only" } }),
+  });
+  await page.getByRole("button", { name: "Add New Expense" }).click();
+  await attachReceipt(page, "slip.png");
+  await readButton(page).click();
+  const line = page.getByText(
+    "A card slip alone is not valid evidence. Please attach a receipt that shows what was bought.",
+  );
+  await expect(line).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
+  await expect(
+    page.getByText("I couldn't read this receipt. Enter the details yourself."),
+  ).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
+  await line.scrollIntoViewIfNeeded();
+  if (process.env.E2E_SHOTS)
+    await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-card-slip-360.png` });
+});
+
 // Owner, 2026-11-19: a receipt in another currency comes back converted at Frankfurter's rate.
 const FX_CAUTION =
   "The exchange rate is a central bank reference rate and may differ from the amount actually charged.";

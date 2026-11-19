@@ -173,6 +173,11 @@ export const READING_DETAIL =
 /** The one quiet failure line (owner, 2026-11-04; Part 11: the issue, then the action). */
 export const READ_FAILED = "I couldn't read this receipt. Enter the details yourself.";
 
+/** A card terminal slip alone (owner, 2026-11-19): the API fills nothing and the card says why. */
+export const REASON_CARD_SLIP = "card_slip_only";
+export const CARD_SLIP =
+  "A card slip alone is not valid evidence. Please attach a receipt that shows what was bought.";
+
 const hedge = (band: Band) => (band === "low" ? "might read" : "reads");
 
 // ---------------------------------------------------------------------------------------------
