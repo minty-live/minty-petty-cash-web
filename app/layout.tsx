@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { ToastProvider } from "@/components/flask/Toasts";
 import { SidebarShell } from "@/components/ui/SidebarShell";
 
+import { SessionExpiredHost } from "@minty/shared/ui";
 import "./globals.css";
 
 // The face every Minty app sets (minty-web's and minty-payment-request-web's app/layout.tsx):
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <ToastProvider>
           <SidebarShell>{children}</SidebarShell>
         </ToastProvider>
+        <SessionExpiredHost />
       </body>
     </html>
   );
