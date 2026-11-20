@@ -2,12 +2,14 @@
 
 import {
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type DragEvent,
   type FormEvent,
   type KeyboardEvent,
   type ReactNode,
+  type Ref,
 } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
@@ -108,7 +110,19 @@ function sentenceOf(err: unknown): string | null {
   return body && typeof body.error === "string" ? body.error : null;
 }
 
+/** What the page can ask of an open card (`ref`). */
+export type AddExpenseHandle = {
+  /**
+   * The card's own Add (Save, editing a line), as its button does: true once the line is saved
+   * (`onAdded`/`onSaved` have run), false on any refusal - the card keeps its messages and
+   * questions (missing fields, DUP1's duplicate question, the server's sentence).
+   */
+  submit: () => Promise<boolean>;
+};
+
 export type AddExpenseProps = {
+  /** The step's Save & Next / Save & Exit with this card open (plan item 3, 2026-11-20). */
+  ref?: Ref<AddExpenseHandle>;
   day: string;
   code: string | null;
   suppliers: Supplier[];
@@ -160,6 +174,9 @@ export type AddExpenseProps = {
  * Either save may come back as DUP1's 409 (another line of the day with the same supplier and
  * amount; `lib/duplicates.ts`): `DuplicateDialog` asks, Go back keeps the card as typed, and Save
  * anyway sends the same form again with `confirm_duplicate=true`.
+ *
+ * The step's Save & Next / Save & Exit can press Add (Save) for the person through `ref`'s
+ * `submit` - its "Add it and continue" (components/report/ExpensesStep.tsx).
  */
 export function AddExpenseCard(props: AddExpenseProps) {
   const {
@@ -180,6 +197,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
     onEntry,
     setBusy,
     onNoDraft,
+    ref,
   } = props;
   const editing = line !== null;
   const toast = useToast();
@@ -379,12 +397,17 @@ export function AddExpenseCard(props: AddExpenseProps) {
     }
   }
 
-  async function add(event: FormEvent) {
+  function add(event: FormEvent) {
     event.preventDefault();
-    if (sending) return;
+    void submit();
+  }
+
+  /** Add (Save, editing): true once the line is saved, false on a refusal. */
+  async function submit(): Promise<boolean> {
+    if (sending) return false;
     if (descriptionMessage) {
       descriptionField.current?.focus();
-      return;
+      return false;
     }
     // a saved line keeps its receipt unless another is picked
     const keepsReceipt = line !== null && line.receipts.length > 0;
@@ -399,15 +422,12 @@ export function AddExpenseCard(props: AddExpenseProps) {
     setErrors(new Set(missing));
     if (missing.length > 0 || !supplier || !account || (!file && !keepsReceipt)) {
       toast("Please fill out the Required Fields", "error");
-      return;
+      return false;
     }
     // what is on the card is what is sent: a reading still out is dropped
     reader.cancel();
-    if (line) {
-      await save(line, file);
-      return;
-    }
-    if (!file) return;
+    if (line) return save(line, file);
+    if (!file) return false;
     const form = new FormData();
     form.append("transaction_date", day);
     form.append("amount", String(parseMoney(amount)));
@@ -418,11 +438,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
     if (converted)
       for (const [name, value] of Object.entries(exchangeFields(converted)))
         form.append(name, value);
-    await sendNew(form);
+    return sendNew(form);
   }
 
+  useImperativeHandle(ref, () => ({ submit }));
+
   /** DUP1's 409 (`lib/duplicates.ts`): ask, and Save anyway sends `form` again with the flag. */
-  function askDuplicate(err: unknown, form: FormData, send: (form: FormData) => Promise<void>) {
+  function askDuplicate(err: unknown, form: FormData, send: (form: FormData) => Promise<unknown>) {
     const warning = duplicatesOf(err);
     if (!warning) return false;
     setDuplicate({
@@ -435,8 +457,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
     return true;
   }
 
-  /** Add's multipart `POST /reports/expenses/lines`. */
-  async function sendNew(form: FormData) {
+  /** Add's multipart `POST /reports/expenses/lines`: true once the line is added. */
+  async function sendNew(form: FormData): Promise<boolean> {
     setSending(true);
     setBusy("Saving...");
     try {
@@ -447,26 +469,28 @@ export function AddExpenseCard(props: AddExpenseProps) {
       setBusy(null);
       onAdded(answer.line, answer.total);
       toast("Expense added successfully!", "success");
+      return true;
     } catch (err) {
       setBusy(null);
       setSending(false);
-      if (err instanceof ApiError && err.status === 401) return;
-      if (askDuplicate(err, form, sendNew)) return;
+      if (err instanceof ApiError && err.status === 401) return false;
+      if (askDuplicate(err, form, sendNew)) return false;
       const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
       if (body?.to === "opening") {
         onNoDraft(err instanceof ApiError ? err.message : ADD_FAILED);
-        return;
+        return false;
       }
       toast(sentenceOf(err) ?? ADD_FAILED, "error");
+      return false;
     }
   }
 
   /** Edit Expense's Save: only the changed fields, and a picked file as the new receipt. */
-  async function save(saved: ExpenseLine, newReceipt: File | null) {
+  async function save(saved: ExpenseLine, newReceipt: File | null): Promise<boolean> {
     const changes = lineEdits(saved, { amount, description, supplier, account });
     if (Object.keys(changes).length === 0 && !newReceipt) {
       onCancel();
-      return;
+      return true;
     }
     const form = new FormData();
     for (const [name, value] of Object.entries(changes)) form.append(name, value);
@@ -477,11 +501,11 @@ export function AddExpenseCard(props: AddExpenseProps) {
       for (const [name, value] of Object.entries(exchangeFields(converted)))
         form.append(name, value);
     }
-    await sendEdit(saved, form);
+    return sendEdit(saved, form);
   }
 
-  /** Edit Expense's multipart `PATCH /expense-lines/{id}`. */
-  async function sendEdit(saved: ExpenseLine, form: FormData) {
+  /** Edit Expense's multipart `PATCH /expense-lines/{id}`: true once the line is saved. */
+  async function sendEdit(saved: ExpenseLine, form: FormData): Promise<boolean> {
     setSending(true);
     setBusy("Saving...");
     try {
@@ -492,17 +516,19 @@ export function AddExpenseCard(props: AddExpenseProps) {
       setBusy(null);
       onSaved?.(answer.line, answer.total);
       toast("Expense updated successfully!", "success");
+      return true;
     } catch (err) {
       setBusy(null);
       setSending(false);
-      if (err instanceof ApiError && err.status === 401) return;
-      if (askDuplicate(err, form, (again) => sendEdit(saved, again))) return;
+      if (err instanceof ApiError && err.status === 401) return false;
+      if (askDuplicate(err, form, (again) => sendEdit(saved, again))) return false;
       const body = err instanceof ApiError ? (err.body as { to?: string } | null) : null;
       if (body?.to === "opening") {
         onNoDraft(err instanceof ApiError ? err.message : EDIT_FAILED);
-        return;
+        return false;
       }
       toast(sentenceOf(err) ?? EDIT_FAILED, "error");
+      return false;
     }
   }
 

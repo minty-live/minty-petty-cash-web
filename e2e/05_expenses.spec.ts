@@ -750,6 +750,79 @@ test("Save & Exit goes home", async ({ page }) => {
   expect(sent).toEqual({ transaction_date: DAY, action: "exit" });
 });
 
+test("Save & Next with an expense not added yet asks; Add it and continue adds it, then goes on (plan item 3)", async ({
+  page,
+}) => {
+  const order: string[] = [];
+  await openWith(page, expensesAnswer(), {
+    onAdd: async (_req, route) => {
+      order.push("add");
+      await route.fulfill({ status: 201, json: { line: { ...LINE, id: "new" }, total: 2435 } });
+    },
+    onSave: async (body, route) => {
+      order.push(`save:${String(body.action)}`);
+      await route.fulfill({
+        json: { draft_id: "d", transaction_date: DAY, next: "deposit" },
+      });
+    },
+  });
+  await fillAdd(page);
+  await page.getByRole("button", { name: "Save & Next" }).click();
+  const ask = page.getByRole("dialog", { name: "You have an expense you haven't added yet." });
+  await expect(ask).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  for (const name of ["Add it and continue", "Leave it out"]) {
+    const box = await ask.getByRole("button", { name }).boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+
+  // Escape goes back: nothing sent, the card as typed
+  await page.keyboard.press("Escape");
+  await expect(ask).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Description" })).toHaveValue("Toner");
+  expect(order).toEqual([]);
+
+  await page.getByRole("button", { name: "Save & Next" }).click();
+  await ask.getByRole("button", { name: "Add it and continue" }).click();
+  await expect(page).toHaveURL(
+    new RegExp(`${BASE}/reports/new/deposit\\?transaction_date=${DAY}$`),
+  );
+  expect(order).toEqual(["add", "save:next"]);
+});
+
+test("Add it and continue with fields missing stays on the card; Leave it out drops it and exits (plan item 3)", async ({
+  page,
+}) => {
+  const order: string[] = [];
+  await openWith(page, expensesAnswer(), {
+    onAdd: async (_req, route) => {
+      order.push("add");
+      await route.fulfill({ status: 201, json: { line: { ...LINE, id: "new" }, total: 2435 } });
+    },
+    onSave: async (body, route) => {
+      order.push(`save:${String(body.action)}`);
+      await route.fulfill({ json: { draft_id: "d", transaction_date: DAY, next: "dashboard" } });
+    },
+  });
+  await page.getByRole("button", { name: "Add New Expense" }).click();
+  await page.getByRole("textbox", { name: "Description" }).fill("Taxi");
+  await page.getByRole("button", { name: "Save & Exit" }).click();
+  const ask = page.getByRole("dialog", { name: "You have an expense you haven't added yet." });
+  await ask.getByRole("button", { name: "Add it and continue" }).click();
+  await expect(toast(page, "Please fill out the Required Fields")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveAttribute(
+    "aria-invalid",
+    "true",
+  );
+  await expect(page.getByRole("textbox", { name: "Description" })).toHaveValue("Taxi");
+  expect(order).toEqual([]);
+
+  await page.getByRole("button", { name: "Save & Exit" }).click();
+  await ask.getByRole("button", { name: "Leave it out" }).click();
+  await expect(page).toHaveURL(new RegExp(`${BASE}$`));
+  expect(order).toEqual(["save:exit"]);
+});
+
 test("a day with no draft goes back to Opening and says why", async ({ page }) => {
   const why = "I don't see a draft yet - let's start with the opening entry.";
   await stub(page, expensesAnswer(), {

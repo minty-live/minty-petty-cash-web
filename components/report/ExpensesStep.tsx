@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 import { draftKey, fingerprint, readDraft } from "@minty/shared/drafts";
 
@@ -12,7 +12,7 @@ import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { typedMoney, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
-import { AddExpenseCard } from "@/components/report/AddExpenseCard";
+import { AddExpenseCard, type AddExpenseHandle } from "@/components/report/AddExpenseCard";
 import {
   ReceiptViewer,
   useReceiptUrls,
@@ -42,6 +42,9 @@ const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then r
 const UNSAVED = "You have an unsaved expense. Please save before navigating.";
 const SAVE_FAILED = "I couldn't save that expense. Mind trying again?";
 const DELETE_FAILED = "I couldn't delete that expense. Mind trying again?";
+export const UNADDED_TITLE = "You have an expense you haven't added yet.";
+export const ADD_AND_CONTINUE = "Add it and continue";
+export const LEAVE_IT_OUT = "Leave it out";
 
 type SaveAnswer = { next: "deposit" | "dashboard"; transaction_date: string };
 
@@ -76,6 +79,12 @@ function firstDraftRecord(day: string, lines: ExpenseLine[]): string {
  *
  * A saved line is changed in place (owner, 2026-11-16): the pencil on its row, or Edit in Expense
  * Details, opens the same card filled in ("Edit Expense"). One card is open at a time.
+ *
+ * Save & Next and Save & Exit with a card open and holding input ask first (plan item 3,
+ * 2026-11-20; `UnaddedExpenseDialog`): Add it and continue presses the card's own Add (Save) and,
+ * once the line is saved, saves the step; a refusal (missing fields, DUP1's question, the server's
+ * sentence) keeps the card and saves nothing. Leave it out drops the card and its draft, then
+ * saves. Escape or the backdrop goes back to the card. Line add, edit and delete stay immediate.
  *
  * Left out on purpose: Flask's dead "submit all" path and the read-only view of a submitted report.
  */
@@ -172,6 +181,10 @@ function ExpensesForm({
   const [viewing, setViewing] = useState<ExpenseLine | null>(null);
   const [deleting, setDeleting] = useState<ExpenseLine | null>(null);
   const alreadySaved = useAlreadySaved();
+  // the open card's own Add / Save, for "Add it and continue"
+  const card = useRef<AddExpenseHandle>(null);
+  // Save & Next / Save & Exit pressed with the open card holding input: the question is open
+  const [asking, setAsking] = useState<"next" | "exit" | null>(null);
 
   // the open card is kept in this browser until its Add or Save (auto-saved drafts, 2026-11-20); a
   // saved line's draft is based on the line as it was, so a line changed or deleted since reads stale
@@ -238,6 +251,33 @@ function ExpensesForm({
     }
   }
 
+  /** Save & Next / Save & Exit: an open card holding input asks first. */
+  function saveOrAsk(action: "next" | "exit") {
+    if (cardOpen && cardDirty) setAsking(action);
+    else void save(action);
+  }
+
+  /** "Add it and continue": the card's Add (Save); the step saves only once the line is saved. */
+  async function addAndContinue() {
+    const action = asking;
+    setAsking(null);
+    if (!action) return;
+    const added = (await card.current?.submit()) ?? false;
+    if (added) await save(action);
+  }
+
+  /** "Leave it out": the card and its auto-saved draft go, then the step saves. */
+  function leaveItOut() {
+    const action = asking;
+    setAsking(null);
+    if (!action) return;
+    draft.clear();
+    setAdding(false);
+    setEditing(null);
+    setCardDirty(false);
+    void save(action);
+  }
+
   async function confirmDelete() {
     const line = deleting;
     if (!line) return;
@@ -286,6 +326,14 @@ function ExpensesForm({
         <DeleteExpenseModal
           onCancel={() => setDeleting(null)}
           onDelete={() => void confirmDelete()}
+        />
+      ) : null}
+      {asking ? (
+        <UnaddedExpenseDialog
+          editing={editing !== null}
+          onAdd={() => void addAndContinue()}
+          onLeaveOut={leaveItOut}
+          onBack={() => setAsking(null)}
         />
       ) : null}
       {busy ? <LoadingOverlay text={busy} /> : null}
@@ -368,6 +416,7 @@ function ExpensesForm({
         {draft.notice}
         {adding ? (
           <AddExpenseCard
+            ref={card}
             key={`new:${cardStart.n}`}
             start={cardStart.start}
             onEntry={(values, file) => setCardEntry({ values, file })}
@@ -395,6 +444,7 @@ function ExpensesForm({
         ) : null}
         {editing ? (
           <AddExpenseCard
+            ref={card}
             key={`${editing.id}:${cardStart.n}`}
             start={cardStart.start}
             onEntry={(values, file) => setCardEntry({ values, file })}
@@ -427,7 +477,7 @@ function ExpensesForm({
       <button
         type="button"
         disabled={busy !== null}
-        onClick={() => void save("next")}
+        onClick={() => saveOrAsk("next")}
         className="group flex w-full items-center justify-center gap-4 rounded-flask-xl bg-flask-teal px-4 py-3 font-medium text-flask-white shadow-flask-md transition-colors hover:bg-flask-teal-hover active:bg-flask-teal-pressed disabled:opacity-70"
       >
         <span>Save &amp; Next</span>
@@ -449,7 +499,7 @@ function ExpensesForm({
         <button
           type="button"
           disabled={busy !== null}
-          onClick={() => void save("exit")}
+          onClick={() => saveOrAsk("exit")}
           className="flex min-h-[40px] items-center justify-center px-4 py-2 text-sm font-medium text-flask-link transition-colors hover:text-flask-link/80"
         >
           <span>Save &amp; Exit</span>
@@ -788,6 +838,42 @@ function PdfIcon() {
         d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
       />
     </svg>
+  );
+}
+
+/**
+ * Save & Next / Save & Exit with an open card holding input (plan item 3, 2026-11-20): Add it and
+ * continue, or Leave it out. Escape and the backdrop go back to the card (`onBack`), nothing saved.
+ */
+function UnaddedExpenseDialog({
+  editing,
+  onAdd,
+  onLeaveOut,
+  onBack,
+}: {
+  editing: boolean;
+  onAdd: () => void;
+  onLeaveOut: () => void;
+  onBack: () => void;
+}) {
+  return (
+    <QuestionDialog
+      title={UNADDED_TITLE}
+      image="dont"
+      busy={false}
+      confirmLabel={ADD_AND_CONTINUE}
+      backLabel={LEAVE_IT_OUT}
+      backTone="teal"
+      onConfirm={onAdd}
+      onBack={onLeaveOut}
+      onDismiss={onBack}
+    >
+      <p>
+        {editing
+          ? "Your changes to this expense aren't saved yet. Add them before you go on, or leave them out to keep the expense as it was."
+          : "It isn't on this report yet. Add it before you go on, or leave it out to let go of what you typed."}
+      </p>
+    </QuestionDialog>
   );
 }
 
