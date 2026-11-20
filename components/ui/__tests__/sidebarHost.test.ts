@@ -2,6 +2,8 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { draftKey, writeDraft } from "@minty/shared/drafts";
+
 import { sidebarHost } from "@/components/ui/sidebarHost";
 import { setAuth } from "@/lib/auth";
 import { _resetHandoffForTests } from "@/lib/handoff";
@@ -47,17 +49,55 @@ describe("the menu's links", () => {
 });
 
 describe("logging out", () => {
-  it("forgets the token and ends the session at Flask with a POST (a GET answers 405)", () => {
+  it("forgets the token and ends the session at Flask with a POST (a GET answers 405)", async () => {
     setAuth("tok", ENTITY, "Olive & Vine");
     const go = vi.fn();
     _resetHandoffForTests(go);
     const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
     sidebarHost.logOut();
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
     expect(document.cookie).not.toContain("petty_cash_token=tok");
-    expect(submit).toHaveBeenCalledTimes(1);
     const form = submit.mock.contexts[0] as HTMLFormElement;
     expect(form.getAttribute("method")).toBe("POST");
     expect(form.getAttribute("action")).toBe("http://localhost:8000/logout");
     expect(go).not.toHaveBeenCalled();
+  });
+});
+
+describe("logging out and the auto-saved drafts (2026-11-20)", () => {
+  const b64 = (o: unknown) => btoa(JSON.stringify(o)).replace(/=+$/, "");
+  const token = `${b64({ alg: "HS256" })}.${b64({ user_id: "u-ann", entity_id: ENTITY })}.sig`;
+  const draft = (userId: string, form: string) => {
+    const key = draftKey({ userId, entityId: ENTITY }, form, "2026-11-16");
+    writeDraft(key, {
+      v: 1,
+      form,
+      record: "2026-11-16",
+      shape: 1,
+      userId,
+      entityId: ENTITY,
+      savedAt: Date.now(),
+      basedOn: "3",
+      value: { cash: "50" },
+      files: [],
+      missing: [],
+    });
+    return key;
+  };
+
+  it("removes this person's drafts BEFORE the token goes; another person's stay", async () => {
+    window.localStorage.clear();
+    setAuth(token, ENTITY, "Olive & Vine");
+    const mine = draft("u-ann", "pc.sales");
+    const theirs = draft("u-bob", "pc.sales");
+    _resetHandoffForTests(vi.fn());
+    const submit = vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
+    sidebarHost.logOut();
+    // the drafts went at once; the token is still here until that is done
+    expect(window.localStorage.getItem(mine)).toBeNull();
+    expect(window.localStorage.getItem(theirs)).not.toBeNull();
+    expect(document.cookie).toContain("petty_cash_token=");
+    await vi.waitFor(() => expect(submit).toHaveBeenCalledTimes(1));
+    expect(document.cookie).not.toContain("petty_cash_token=");
   });
 });

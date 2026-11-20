@@ -5,7 +5,7 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
 
 import { companyRef } from "./companyRef";
-import { landingAddress, mintModuleToken } from "./helpers";
+import { expectNoHorizontalScroll, landingAddress, mintModuleToken } from "./helpers";
 
 const ENTITY = "3d65f186-5ba1-4bf7-a1b0-cc64a113eb5c";
 const NAME = "E2E Petty Cash Shop";
@@ -302,4 +302,64 @@ test("the page reloads with no console error", async ({ page }) => {
   await page.reload();
   await expect(page.getByRole("heading", { name: "Sales Entry" })).toBeVisible();
   expect(errors).toEqual([]);
+});
+
+// Auto-saved drafts (owner's decisions doc L1, 2026-11-20): kept in this browser 2 s after the last
+// change, offered back after a reload (ask first), cleared by the step's own save; a report saved
+// again since (its edit_version moved) shows the draft read-only, never puts it back. At 360 (the
+// phone project) and 1440.
+test.describe("auto-saved drafts", () => {
+  const notice = (page: Page) => page.locator("[data-draft-notice]");
+
+  test.beforeEach(async ({ page }, info) => {
+    if (info.project.name === "desktop") await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
+  test("a reload offers what was typed; Restore puts it back; Save leaves no draft", async ({
+    page,
+  }) => {
+    await openWith(page, salesAnswer({ edit_version: 3 }));
+    const cash = page.getByRole("textbox", { name: "Cash Sales" });
+    await cash.fill("50");
+    await page.waitForTimeout(2500);
+    await page.reload();
+    await expect(notice(page)).toHaveAttribute("data-draft-notice", "fresh");
+    await expect(notice(page)).toContainText(/You have unsaved changes from \d\d:\d\d\./);
+    await expect(cash).toHaveValue("");
+    await expectNoHorizontalScroll(page);
+    await notice(page).getByRole("button", { name: "Restore" }).click();
+    await expect(notice(page)).toHaveCount(0);
+    await expect(cash).toHaveValue(/^50(\.00)?$/);
+
+    await page.getByRole("button", { name: "Save & Next" }).click();
+    await expect(page).toHaveURL(/\/reports\/new\/expense\?/);
+    await page.goto(`${BASE}/reports/new/sale?transaction_date=${DAY}`);
+    await expect(page.getByRole("heading", { name: "Sales Entry" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Cash Sales" })).toBeVisible();
+    await expect(notice(page)).toHaveCount(0);
+  });
+
+  test("saved again since (edit_version moved): shown read-only, never put back", async ({
+    page,
+  }) => {
+    await openWith(page, salesAnswer({ edit_version: 3 }));
+    await page.getByRole("textbox", { name: "Cash Sales" }).fill("50");
+    await page.waitForTimeout(2500);
+    // someone saved a step of this report meanwhile
+    await page.route("**/api/petty-cash/v1/companies/*/reports/sales**", (route) =>
+      route.fulfill({ json: salesAnswer({ edit_version: 4, cash_sales: 20 }) }),
+    );
+    await page.reload();
+    await expect(notice(page)).toHaveAttribute("data-draft-notice", "stale");
+    await expect(notice(page)).toContainText(
+      /This was saved again after your unsaved changes from \d\d:\d\d, so we haven't put them back\./,
+    );
+    await expect(notice(page).getByRole("button", { name: "Restore" })).toHaveCount(0);
+    await notice(page).getByRole("button", { name: "Show what I typed" }).click();
+    await expect(notice(page)).toContainText("HKD\u00a050.00");
+    await expect(page.getByRole("textbox", { name: "Cash Sales" })).toHaveValue("20.00");
+    await expectNoHorizontalScroll(page);
+    await notice(page).getByRole("button", { name: "Discard" }).click();
+    await expect(notice(page)).toHaveCount(0);
+  });
 });

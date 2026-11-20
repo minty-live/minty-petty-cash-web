@@ -11,6 +11,7 @@ import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { LoadingOverlay, ReportBadge } from "@/components/report/ReportChrome";
+import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
@@ -87,6 +88,9 @@ export function SalesStep({ day }: { day: string | null }) {
   );
 }
 
+/** What the Sales step's draft keeps: exactly what `dirty()` compares. */
+type SalesDraft = { values: Record<string, string>; cash: string };
+
 /** How a saved amount first shows: grouped, and a zero or none as an empty field (the placeholder). */
 function shown(amount: number | null): string {
   return amount ? formatAmount(amount) : "";
@@ -135,8 +139,29 @@ function SalesForm({
     );
   }
 
+  // what is typed is kept in this browser until the save (auto-saved drafts, 2026-11-20)
+  const isDirty = dirty();
+  const draft = useStepDraft<SalesDraft>({
+    form: "pc.sales",
+    record: day,
+    basedOn: reportVersion(page.edit_version),
+    value: { values, cash },
+    dirty: isDirty,
+    onRestore: (kept) => {
+      setValues({ ...initial.values, ...kept.values });
+      setCash(kept.cash);
+    },
+    describe: (kept) => [
+      ...[...electronic, ...delivery].map((m) => ({
+        label: flaskLabel(m.name),
+        value: typedMoney(kept.values[m.value_name], code),
+      })),
+      ...(parts.cash ? [{ label: "Cash Sales", value: typedMoney(kept.cash, code) }] : []),
+    ],
+  });
+
   // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
-  const leave = useStepLeave(dirty());
+  const leave = useStepLeave(isDirty, draft.clear);
 
   async function save(action: "next" | "exit") {
     setSaving(true);
@@ -157,6 +182,7 @@ function SalesForm({
           edit_version: page.edit_version,
         },
       });
+      draft.clear();
       if (answer.next === "dashboard") {
         router.push(home);
         return;
@@ -227,6 +253,7 @@ function SalesForm({
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Sales Entry</h2>
       </div>
+      {draft.notice}
 
       <form
         onSubmit={(e) => {

@@ -131,6 +131,10 @@ export type AddExpenseProps = {
   onCancel: () => void;
   /** Whether the card holds input not saved yet - the wizard asks before leaving it (2026-11-17). */
   onDirty?: (dirty: boolean) => void;
+  /** A restored auto-saved draft (2026-11-20): the card opens with these values and receipt. */
+  start?: { values: EntryValues; file: File | null } | null;
+  /** Each change to the typed values or the picked receipt, for the page's auto-saved draft. */
+  onEntry?: (values: EntryValues, file: File | null) => void;
   /** The phone card's overlay: its text while something is sent, null when done. */
   setBusy: (text: string | null) => void;
   /** The API found no draft for the day: back to Opening with its sentence. */
@@ -172,6 +176,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
     onSaved,
     onCancel,
     onDirty,
+    start = null,
+    onEntry,
     setBusy,
     onNoDraft,
   } = props;
@@ -180,7 +186,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const card = useRef<HTMLFormElement>(null);
   // the four typed fields, with the receipt reader's marks and notes on them (lib/expenseAi.ts)
   const [entry, setEntry] = useState<EntryState>(() =>
-    entryState(line ? lineValues(line) : undefined),
+    entryState(start ? start.values : line ? lineValues(line) : undefined),
   );
   const { amount, description, supplierText, supplier, accountText, account } = entry.values;
   const change = (field: SuggestedField, patch: Partial<EntryValues>) =>
@@ -235,8 +241,10 @@ export function AddExpenseCard(props: AddExpenseProps) {
     () => setCardSlip(true),
   );
   // the receipt and an object URL of it, made when it is picked and let go when it is replaced
-  const [picked, setPicked] = useState<Picked | null>(null);
-  const pickedRef = useRef<Picked | null>(null);
+  const [picked, setPicked] = useState<Picked | null>(() =>
+    start?.file ? { file: start.file, url: URL.createObjectURL(start.file) } : null,
+  );
+  const pickedRef = useRef<Picked | null>(picked);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
   // "Read receipt" was pressed for this receipt: the button goes, and comes back after a failed read
@@ -262,6 +270,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
     onDirtyRef.current?.(holdsInput);
   }, [holdsInput]);
   useEffect(() => () => onDirtyRef.current?.(false), []);
+  const onEntryRef = useRef(onEntry);
+  useEffect(() => {
+    onEntryRef.current = onEntry;
+  });
+  useEffect(() => {
+    onEntryRef.current?.(entry.values, file);
+  }, [entry.values, file]);
   const [newContact, setNewContact] = useState<string | null>(null);
   const newContactField = useRef<HTMLInputElement>(null);
   const newContactMessage = newContact === null ? null : newContactProblem(newContact);

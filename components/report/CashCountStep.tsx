@@ -10,6 +10,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
+import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
@@ -55,6 +56,19 @@ const NO_DISCREPANCY = "No discrepancy — description not required";
 
 type SaveAnswer = { next: "ending" | "dashboard"; transaction_date: string };
 type Counts = Record<string, number>;
+/** The calculator's rows as typed (its own state, lifted for the draft). */
+type Typed = Record<string, string>;
+/**
+ * What the Cash Count step's draft keeps: what `dirty()` compares, plus whether the calculator
+ * was open and what was typed in it (Restore opens it again with those counts).
+ */
+type CashCountDraft = {
+  counts: Counts;
+  safe: string;
+  reason: string;
+  calculator: boolean;
+  typed: Typed | null;
+};
 
 /**
  * The report wizard's Cash Count step - a pixel-faithful port of Flask's `report/cash_count.html`:
@@ -165,6 +179,12 @@ function CashCountForm({
     },
   });
   const [calculator, setCalculator] = useState(false);
+  // the open calculator's typed counts (CalculatorModal's onTyped), and what a Restore reopens it with
+  const [typed, setTyped] = useState<Typed | null>(null);
+  const [calculatorStart, setCalculatorStart] = useState<{ n: number; typed: Typed | null }>({
+    n: 0,
+    typed: null,
+  });
   const [busy, setBusy] = useState<string | null>(null);
   const alreadySaved = useAlreadySaved();
   const [negative, setNegative] = useState(expected < 0);
@@ -207,8 +227,53 @@ function CashCountForm({
     );
   }
 
+  // what is typed is kept in this browser until the save (auto-saved drafts, 2026-11-20), the
+  // calculator's rows included while it is open
+  const isDirty = dirty();
+  const typedChanged =
+    calculator &&
+    typed !== null &&
+    page.denominations.some((d) => parseCount(typed[d.id] ?? "") !== (counts[d.id] ?? 0));
+  const draft = useStepDraft<CashCountDraft>({
+    form: "pc.cash-count",
+    record: day,
+    basedOn: reportVersion(page.edit_version),
+    value: { counts, safe, reason, calculator, typed: calculator ? typed : null },
+    dirty: isDirty || typedChanged,
+    onRestore: (kept) => {
+      const nextCounts = { ...initial.counts, ...kept.counts };
+      setCounts(nextCounts);
+      setSafe(kept.safe);
+      setReason(kept.reason);
+      if (tillTotal(page.denominations, nextCounts) > 0) setTillShown(true);
+      setRefused(null);
+      if (kept.calculator) {
+        setCalculatorStart((start) => ({ n: start.n + 1, typed: kept.typed }));
+        setCalculator(true);
+      }
+    },
+    describe: (kept) => [
+      {
+        label: "Cash Box Balance",
+        value: formatMoney(
+          tillTotal(page.denominations, { ...initial.counts, ...kept.counts }),
+          code,
+        ),
+      },
+      { label: "Safebox Cash Balance", value: typedMoney(kept.safe, code) },
+      { label: "Discrepancy Details", value: kept.reason },
+    ],
+  });
+
   function go(step: WizardStep) {
     router.push(stepHref(entityId, entityName, step, day));
+  }
+
+  function closeCalculator() {
+    setCalculator(false);
+    setTyped(null);
+    setCalculatorStart((start) => ({ n: start.n + 1, typed: null }));
+    calculatorButton.current?.focus();
   }
 
   async function save(action: "next" | "exit") {
@@ -240,6 +305,7 @@ function CashCountForm({
           edit_version: page.edit_version,
         },
       });
+      draft.clear();
       if (answer.next === "dashboard") router.push(home);
       else go("ending");
     } catch (err) {
@@ -274,27 +340,26 @@ function CashCountForm({
   }
 
   // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
-  const leave = useStepLeave(dirty());
+  const leave = useStepLeave(isDirty, draft.clear);
 
   const overlays = (
     <>
       {leave}
       {calculator ? (
         <CalculatorModal
+          key={calculatorStart.n}
           denominations={page.denominations}
           counts={counts}
+          initialTyped={calculatorStart.typed}
+          onTyped={setTyped}
           code={code}
-          onClose={() => {
-            setCalculator(false);
-            calculatorButton.current?.focus();
-          }}
+          onClose={closeCalculator}
           onSave={(next) => {
             setCounts(next);
             setTillShown(true);
             if (refused && page.denominations.some((d) => d.id === refused.field)) setRefused(null);
             settle(next, safe);
-            setCalculator(false);
-            calculatorButton.current?.focus();
+            closeCalculator();
           }}
         />
       ) : null}
@@ -365,6 +430,7 @@ function CashCountForm({
           </span>
         </div>
       </div>
+      {draft.notice ? <div className="mt-4">{draft.notice}</div> : null}
 
       <form
         noValidate
@@ -601,30 +667,48 @@ function CountInput({
 function CalculatorModal({
   denominations,
   counts,
+  initialTyped,
+  onTyped,
   code,
   onClose,
   onSave,
 }: {
   denominations: Denomination[];
   counts: Counts;
+  /** The rows as a restored draft had them typed; else the saved counts. */
+  initialTyped?: Typed | null;
+  /** Each change to the rows, for the step's auto-saved draft. */
+  onTyped?: (typed: Typed) => void;
   code: string | null;
   onClose: () => void;
   onSave: (counts: Counts) => void;
 }) {
-  const [typed, setTyped] = useState<Record<string, string>>(() =>
-    Object.fromEntries(denominations.map((d) => [d.id, counts[d.id] ? String(counts[d.id]) : ""])),
-  );
+  const [typed, setTyped] = useState<Typed>(() => ({
+    ...Object.fromEntries(
+      denominations.map((d) => [d.id, counts[d.id] ? String(counts[d.id]) : ""]),
+    ),
+    ...(initialTyped ?? {}),
+  }));
+  useEffect(() => {
+    onTyped?.(typed);
+  }, [typed, onTyped]);
   const panel = useRef<HTMLDivElement>(null);
   const inputs = useRef<Record<string, HTMLInputElement | null>>({});
 
+  // focus the panel once, on opening: the page re-renders as the rows are typed (onTyped), with a
+  // new onClose each time, which must never pull the focus out of the row being typed
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     panel.current?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, []);
 
   const parsed: Counts = Object.fromEntries(
     denominations.map((d) => [d.id, parseCount(typed[d.id] ?? "")]),

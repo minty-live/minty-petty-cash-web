@@ -13,10 +13,14 @@ import { LeaveDialog } from "@/components/ui/LeaveDialog";
  * of Flask's stepper-only toast. Go Back stays with the typing; Discard changes goes on (the page
  * leaves, so there is nothing to put back). Save & Next and Save & Exit save first, so they never
  * ask. A reload or a closed tab leaves without asking (no native browser dialog). The returned
- * node goes in the page's overlays.
+ * node goes in the page's overlays. `onDiscard` runs on Discard changes - the step's auto-saved
+ * draft goes with the typing (`useStepDraft`'s `clear`).
  */
-export function useStepLeave(dirty: boolean): ReactNode {
+export function useStepLeave(dirty: boolean, onDiscard?: () => void): ReactNode {
   const [discarded, setDiscarded] = useState(false);
-  const guard = useLeaveGuard(dirty && !discarded, () => setDiscarded(true));
+  const guard = useLeaveGuard(dirty && !discarded, () => {
+    setDiscarded(true);
+    onDiscard?.();
+  });
   return guard.open ? <LeaveDialog onDiscard={guard.discard} onStay={guard.stay} /> : null;
 }

@@ -11,6 +11,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
+import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FixNegativeBalanceModal,
@@ -32,6 +33,12 @@ import { stepHref, WIZARD_BACK_SKIP } from "@/lib/wizardPages";
 const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then reload the page.";
 
 type SaveAnswer = { next: "sales" | "dashboard"; transaction_date: string };
+/** What the Opening step's draft keeps: exactly what `dirty()` compares. */
+type OpeningDraft = {
+  addition: string;
+  withdrawal: "company" | "personal";
+  withdrawalDirty: boolean;
+};
 
 /**
  * The report wizard's Opening step - a pixel-faithful port of Flask's `report/opening.html`: the
@@ -129,6 +136,29 @@ function OpeningForm({
     return now !== "" && now !== "-" && now !== initialAddition.replace(/,/g, "");
   }
 
+  // what is typed is kept in this browser until the save (auto-saved drafts, 2026-11-20); a day
+  // with no report yet is "none", so a report started since reads stale
+  const isDirty = dirty();
+  const draft = useStepDraft<OpeningDraft>({
+    form: "pc.opening",
+    record: day,
+    basedOn: reportVersion(page.edit_version),
+    value: { addition, withdrawal, withdrawalDirty },
+    dirty: isDirty,
+    onRestore: (kept) => {
+      setAddition(kept.addition);
+      setWithdrawal(kept.withdrawal === "company" ? "company" : "personal");
+      setWithdrawalDirty(kept.withdrawalDirty);
+    },
+    describe: (kept) => [
+      { label: "Addition to Cash Drawer", value: typedMoney(kept.addition, code) },
+      {
+        label: "Withdrawal from",
+        value: kept.withdrawal === "company" ? "Company Bank" : "Personal",
+      },
+    ],
+  });
+
   async function save(action: "next" | "exit") {
     if (opening < 0) {
       setNegative(true);
@@ -146,6 +176,7 @@ function OpeningForm({
           edit_version: page.edit_version,
         },
       });
+      draft.clear();
       if (answer.next !== "sales") router.push(home);
       else router.push(stepHref(entityId, entityName, "sales", answer.transaction_date));
     } catch (err) {
@@ -191,7 +222,7 @@ function OpeningForm({
   }
 
   // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
-  const leave = useStepLeave(dirty());
+  const leave = useStepLeave(isDirty, draft.clear);
 
   const overlays = (
     <>
@@ -231,6 +262,7 @@ function OpeningForm({
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Opening</h2>
       </div>
+      {draft.notice}
 
       <form
         onSubmit={(e) => {

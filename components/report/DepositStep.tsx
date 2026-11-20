@@ -10,6 +10,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
+import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
@@ -136,6 +137,21 @@ function DepositForm({
     refused ??
     (page.cash_on_hand < 0 ? null : depositProblem(parseMoney(amount), page.cash_on_hand, code));
 
+  // what is typed is kept in this browser until the save (auto-saved drafts, 2026-11-20)
+  const isDirty = changed(amount, initial);
+  const draft = useStepDraft<{ amount: string }>({
+    form: "pc.deposit",
+    record: day,
+    basedOn: reportVersion(page.edit_version),
+    value: { amount },
+    dirty: isDirty,
+    onRestore: (kept) => {
+      setAmount(kept.amount);
+      setRefused(null);
+    },
+    describe: (kept) => [{ label: "Deposit Amount", value: typedMoney(kept.amount, code) }],
+  });
+
   function go(step: WizardStep) {
     router.push(stepHref(entityId, entityName, step, day));
   }
@@ -160,6 +176,7 @@ function DepositForm({
           edit_version: page.edit_version,
         },
       });
+      draft.clear();
       if (answer.next === "dashboard") router.push(home);
       else go("cash_count");
     } catch (err) {
@@ -191,7 +208,7 @@ function DepositForm({
   }
 
   // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
-  const leave = useStepLeave(changed(amount, initial));
+  const leave = useStepLeave(isDirty, draft.clear);
 
   const overlays = (
     <>
@@ -247,6 +264,7 @@ function DepositForm({
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Deposit to Bank</h2>
       </div>
+      {draft.notice}
 
       <form
         noValidate

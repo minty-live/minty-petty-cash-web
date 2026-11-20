@@ -10,12 +10,14 @@
 
 import { usePathname } from "next/navigation";
 
+import { clearDraftsForUser } from "@minty/shared/drafts";
 import { guardLeave } from "@minty/shared/leaveGuard";
 import { setSidebarHost, type SidebarHost, type Viewer } from "@minty/shared/sidebar";
 
 import { mintyFetch } from "@/lib/apiClient";
 import { clearAuth, getAuth, moduleClaims } from "@/lib/auth";
 import { pettyCashHome } from "@/lib/companyPages";
+import { currentDraftScope } from "@/lib/draftScope";
 import { env } from "@/lib/env";
 import { hubUrl, logoutUrl, paymentsUrl, postNavigate } from "@/lib/handoff";
 import { historyHref } from "@/lib/history";
@@ -83,13 +85,18 @@ export const sidebarHost: SidebarHost = {
   /**
    * Every app's Logout ends the session everywhere: forget this app's token, then a form POST to
    * Flask's `/logout` (a GET answers 405). A page with unsaved changes asks first (`@minty/shared/leaveGuard`); nothing here
-   * runs until the person picks "Discard changes".
+   * runs until the person picks "Discard changes". This explicit sign-out also removes the person's
+   * auto-saved drafts in this browser (`clearDraftsForUser`, done within 500 ms) before the token
+   * goes; a lapsed or expired session never does - the drafts exist to survive it.
    */
   logOut: (onLeaving) =>
     guardLeave(() => {
       onLeaving?.();
-      clearAuth();
-      postNavigate(logoutUrl());
+      const userId = currentDraftScope()?.userId;
+      void (userId ? clearDraftsForUser(userId) : Promise.resolve()).then(() => {
+        clearAuth();
+        postNavigate(logoutUrl());
+      });
     }),
 
   currentToken: () => getAuth()?.token ?? "",

@@ -3,10 +3,13 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 
+import { draftKey, fingerprint, readDraft } from "@minty/shared/drafts";
+
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
+import { typedMoney, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { AddExpenseCard } from "@/components/report/AddExpenseCard";
@@ -20,6 +23,8 @@ import { sentenceOf, toOpening, useBackToOpening } from "@/components/report/ste
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome } from "@/lib/companyPages";
+import { currentDraftScope } from "@/lib/draftScope";
+import { EMPTY_VALUES, type EntryValues } from "@/lib/expenseAi";
 import {
   detailRows,
   receiptKind,
@@ -39,6 +44,25 @@ const SAVE_FAILED = "I couldn't save that expense. Mind trying again?";
 const DELETE_FAILED = "I couldn't delete that expense. Mind trying again?";
 
 type SaveAnswer = { next: "deposit" | "dashboard"; transaction_date: string };
+
+const EXPENSE_FORM = "pc.expense";
+/** What an expense card's draft keeps: its typed values (the receipt goes as the draft's file). */
+type ExpenseDraft = { values: EntryValues };
+
+/**
+ * The record a card's draft is kept under: `new:<day>` for Add New Expense, the line's id for Edit
+ * Expense. On arrival, the new line's draft if there is one, else the first saved line with one, so
+ * the notice can offer it before any card is open.
+ */
+function firstDraftRecord(day: string, lines: ExpenseLine[]): string {
+  const fresh = `new:${day}`;
+  const scope = currentDraftScope();
+  if (!scope) return fresh;
+  const has = (record: string) =>
+    readDraft(draftKey(scope, EXPENSE_FORM, record), { userId: scope.userId, shape: 1 }) !== null;
+  if (has(fresh)) return fresh;
+  return lines.find((l) => has(l.id))?.id ?? fresh;
+}
 
 /**
  * The report wizard's Expenses step - a pixel-faithful port of Flask's `report/expense.html`: the
@@ -133,10 +157,56 @@ function ExpensesForm({
   const cardOpen = adding || editing !== null;
   // the open card holds input not saved yet (AddExpenseCard's onDirty)
   const [cardDirty, setCardDirty] = useState(false);
+  // the open card's values and receipt (AddExpenseCard's onEntry), kept as the browser draft, and
+  // what the card opens with: a restored draft, or nothing (a new `n` remounts it)
+  const [cardEntry, setCardEntry] = useState<{ values: EntryValues; file: File | null } | null>(
+    null,
+  );
+  const [cardStart, setCardStart] = useState<{
+    n: number;
+    start: { values: EntryValues; file: File | null } | null;
+  }>({ n: 0, start: null });
+  const newRecord = `new:${day}`;
+  const [idleRecord] = useState(() => firstDraftRecord(day, page.lines));
   const [busy, setBusy] = useState<string | null>(null);
   const [viewing, setViewing] = useState<ExpenseLine | null>(null);
   const [deleting, setDeleting] = useState<ExpenseLine | null>(null);
   const alreadySaved = useAlreadySaved();
+
+  // the open card is kept in this browser until its Add or Save (auto-saved drafts, 2026-11-20); a
+  // saved line's draft is based on the line as it was, so a line changed or deleted since reads stale
+  const record = editing ? editing.id : adding ? newRecord : idleRecord;
+  const draftLine = record === newRecord ? null : lines.find((l) => l.id === record);
+  const draft = useStepDraft<ExpenseDraft>({
+    form: EXPENSE_FORM,
+    record,
+    basedOn: record === newRecord ? null : draftLine ? fingerprint(draftLine) : "deleted",
+    value: { values: cardEntry?.values ?? EMPTY_VALUES },
+    files: cardEntry?.file ? [cardEntry.file] : undefined,
+    dirty: cardOpen && cardDirty,
+    onRestore: (kept, files) => {
+      const start = { values: { ...EMPTY_VALUES, ...kept.values }, file: files[0] ?? null };
+      if (record !== newRecord && !draftLine) return;
+      setViewing(null);
+      setAdding(record === newRecord);
+      setEditing(record === newRecord ? null : (draftLine ?? null));
+      setCardStart((at) => ({ n: at.n + 1, start }));
+    },
+    describe: (kept) => [
+      { label: "Expense Amount", value: typedMoney(kept.values.amount, code) },
+      { label: "Description", value: kept.values.description },
+      { label: "Suppliers", value: kept.values.supplierText },
+      { label: "Account Code", value: kept.values.accountText },
+    ],
+  });
+
+  /** Open Add New Expense or Edit Expense, fresh. */
+  function openCard(line: ExpenseLine | null) {
+    setCardStart((at) => ({ n: at.n + 1, start: null }));
+    setCardEntry(null);
+    setAdding(line === null);
+    setEditing(line);
+  }
 
   async function save(action: "next" | "exit") {
     setBusy("Saving...");
@@ -195,11 +265,11 @@ function ExpensesForm({
       return;
     }
     setViewing(null);
-    setEditing(line);
+    openCard(line);
   }
 
   // "Leave without saving?" while the open card holds input (owner, 2026-11-17)
-  const leave = useStepLeave(cardOpen && cardDirty);
+  const leave = useStepLeave(cardOpen && cardDirty, draft.clear);
 
   const overlays = (
     <>
@@ -272,7 +342,7 @@ function ExpensesForm({
               <div>
                 <button
                   type="button"
-                  onClick={() => setAdding(true)}
+                  onClick={() => openCard(null)}
                   className="group mt-6 flex w-full cursor-pointer items-center justify-center gap-2 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-3 font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft"
                 >
                   <svg
@@ -295,8 +365,12 @@ function ExpensesForm({
           </div>
         </div>
 
+        {draft.notice}
         {adding ? (
           <AddExpenseCard
+            key={`new:${cardStart.n}`}
+            start={cardStart.start}
+            onEntry={(values, file) => setCardEntry({ values, file })}
             day={day}
             code={code}
             suppliers={suppliers}
@@ -308,6 +382,7 @@ function ExpensesForm({
               setSuppliers((all) => (all.some((x) => x.id === s.id) ? all : [...all, s]))
             }
             onAdded={(line, newTotal) => {
+              draft.clear();
               setLines((all) => [...all, line]);
               setTotal(newTotal);
               setAdding(false);
@@ -320,7 +395,9 @@ function ExpensesForm({
         ) : null}
         {editing ? (
           <AddExpenseCard
-            key={editing.id}
+            key={`${editing.id}:${cardStart.n}`}
+            start={cardStart.start}
+            onEntry={(values, file) => setCardEntry({ values, file })}
             day={day}
             code={code}
             suppliers={suppliers}
@@ -334,6 +411,7 @@ function ExpensesForm({
             line={editing}
             onAdded={() => undefined}
             onSaved={(line, newTotal) => {
+              draft.clear();
               setLines((all) => all.map((l) => (l.id === line.id ? line : l)));
               setTotal(newTotal);
               setEditing(null);
