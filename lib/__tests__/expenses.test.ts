@@ -126,6 +126,12 @@ describe("missingFields", () => {
   it("passes a complete form", () => {
     expect(missingFields(full)).toEqual([]);
   });
+  it("counts the receipt reader's new supplier while the box holds its name (2026-11-23)", () => {
+    const read = { ...full, supplier: null, supplierText: "Kwok Transport" };
+    expect(missingFields({ ...read, newSupplier: { name: "Kwok Transport" } })).toEqual([]);
+    expect(missingFields({ ...read, newSupplier: { name: "Kwok" } })).toEqual(["supplier"]);
+    expect(missingFields(read)).toEqual(["supplier"]);
+  });
   it("refuses a zero amount, a supplier or account not chosen from the list, and no receipt", () => {
     expect(
       missingFields({

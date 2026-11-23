@@ -64,11 +64,18 @@ function api(...extract: Answer[]) {
     }
     if (path === "/reports/expenses/lines") {
       adds.push(init?.form as FormData);
-      return { line: { id: "new" }, total: 48.8 };
+      // a reader's new supplier comes back on the line (the user, 2026-11-23)
+      const made = (init?.form as FormData).has("new_supplier_token")
+        ? { supplier: { id: "s-kwok", name: "Kwok Transport" } }
+        : {};
+      return { line: { id: "new", ...made }, total: 48.8 };
     }
     if (path.startsWith("/expense-lines/")) {
       edits.push({ path, form: init?.form as FormData, method: init?.method });
-      return { line: { id: "l1" }, total: 99.9 };
+      const made = (init?.form as FormData).has("new_supplier_token")
+        ? { supplier: { id: "s-kwok", name: "Kwok Transport" } }
+        : {};
+      return { line: { id: "l1", ...made }, total: 99.9 };
     }
     if (path === "/suppliers") {
       suppliers.push(init?.json);
@@ -327,6 +334,63 @@ describe("the receipt reader in Add New Expense", () => {
     await userEvent.click(await screen.findByText("+ Add 'Kwok Transport' as a new contact"));
     expect(screen.getByRole("textbox", { name: /New Contact/ })).toHaveValue("Kwok Transport");
     expect(calls.suppliers).toEqual([]); // nothing is created until the person adds it
+  });
+
+  it("with the API's token, Add sends it instead of a supplier and the page learns the new contact", async () => {
+    const calls = api({
+      suggestions: {
+        ...SUGGESTIONS,
+        supplier: {
+          value: "",
+          confidence: 0,
+          band: "medium",
+          applied: false,
+          contact_id: "",
+          detected_name: "Kwok Transport",
+          new_supplier_token: "signed",
+        },
+      },
+      reason: null,
+    });
+    const props = show({ canCreateSupplier: false });
+    await attachAndRead(png());
+    await waitFor(() => expect(supplier()).toHaveValue("Kwok Transport"));
+    expect(supplier()).toHaveAccessibleDescription(
+      "Supplier suggested — please check. It isn't in your contacts yet, so it's added when you save this expense.",
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(props.onAdded).toHaveBeenCalled());
+    const sent = calls.adds[0];
+    expect(sent.get("new_supplier_token")).toBe("signed");
+    expect(sent.has("supplier_id")).toBe(false);
+    expect(props.onSupplierCreated).toHaveBeenCalledWith({ id: "s-kwok", name: "Kwok Transport" });
+    expect(calls.suppliers).toEqual([]);
+  });
+
+  it("typing over the read supplier drops it: Add then asks for a supplier from the list", async () => {
+    const calls = api({
+      suggestions: {
+        ...SUGGESTIONS,
+        supplier: {
+          value: "",
+          confidence: 0,
+          band: "medium",
+          applied: false,
+          contact_id: "",
+          detected_name: "Kwok Transport",
+          new_supplier_token: "signed",
+        },
+      },
+      reason: null,
+    });
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(supplier()).toHaveValue("Kwok Transport"));
+    await userEvent.type(supplier(), "x");
+    await userEvent.keyboard("{Escape}");
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    expect(supplier()).toHaveAttribute("aria-invalid", "true");
+    expect(calls.adds).toHaveLength(0);
   });
 
   it("switched off ('disabled'), it says nothing and is not asked again this session", async () => {

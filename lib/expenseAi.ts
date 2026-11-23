@@ -19,8 +19,10 @@
  * ("Use the value from the receipt"); and ADD IS NEVER BLOCKED - the read runs beside the card,
  * and nothing is written until Add (the API writes nothing either).
  *
- * A supplier and an account are chosen only by an id from the company's lists; a name read off the
- * receipt that is not a supplier is only offered for New Contact - never created. The banding is
+ * A supplier and an account are chosen only by an id from the company's lists. A name read off the
+ * receipt that is not a supplier comes with the API's signed `new_supplier_token` (the user,
+ * 2026-11-23): it fills the Suppliers box as a new contact, and the API adds it when the line is
+ * saved - never on the read. The banding is
  * the server's (`EXPENSE_AI_CONF_*`); this side follows `band` and `applied` as they come.
  *
  * The generic half - the latch, the answer, Confirmed/Clear/Use/another receipt, the reading copy -
@@ -57,7 +59,12 @@ export {
 } from "@minty/shared/reader";
 
 export type Suggestions = {
-  supplier?: ReadField & { contact_id?: string; detected_name?: string };
+  supplier?: ReadField & {
+    contact_id?: string;
+    detected_name?: string;
+    /** The detected name signed for this company: Add/Save sends it and the API adds the supplier. */
+    new_supplier_token?: string;
+  };
   account?: ReadField & { account_id?: string; code?: string; name?: string };
   amount?: ReadField;
   description?: ReadField;
@@ -91,7 +98,13 @@ export type ExtractAnswer = { suggestions: Suggestions | null; reason: string | 
 /** The fields a suggestion can fill. */
 export type SuggestedField = "amount" | "supplier" | "account" | "description";
 
-/** The card's own values (the receipt is kept apart). A supplier or account counts once picked. */
+/** A supplier the receipt names and the company lacks: added by the API when the line is saved. */
+export type NewSupplier = { name: string; token: string };
+
+/**
+ * The card's own values (the receipt is kept apart). A supplier or account counts once picked; a
+ * read supplier the company lacks (`newSupplier`) counts while the box still holds its name.
+ */
 export type EntryValues = {
   amount: string;
   description: string;
@@ -99,7 +112,21 @@ export type EntryValues = {
   supplier: Supplier | null;
   accountText: string;
   account: Account | null;
+  newSupplier?: NewSupplier | null;
 };
+
+/** The read supplier the card will add, while the Suppliers box still holds its name. */
+export function readSupplier(values: EntryValues): NewSupplier | null {
+  const read = values.newSupplier;
+  return !values.supplier && read && values.supplierText.trim() === read.name ? read : null;
+}
+
+/** The form field Add/Save sends the read supplier's token in (`routes/expenses.py`). */
+export const NEW_SUPPLIER_TOKEN = "new_supplier_token";
+
+/** Said with the supplier's suggested line while it is a new contact (the user, 2026-11-23). */
+export const NEW_SUPPLIER_DETAIL =
+  "It isn't in your contacts yet, so it's added when you save this expense.";
 
 /** A note under a field: the receipt reads something else (or, low band, might). Nothing moves without its button. */
 export type ReadNote = SharedReadNote<EntryValues>;
@@ -114,6 +141,7 @@ export const EMPTY_VALUES: EntryValues = {
   supplier: null,
   accountText: "",
   account: null,
+  newSupplier: null,
 };
 
 export function entryState(values: EntryValues = EMPTY_VALUES): EntryState {
@@ -287,7 +315,7 @@ export function withSuggestions(
     ? (suppliers.find((x) => x.id === supplier.contact_id) ?? null)
     : null;
   if (supplier && known) {
-    const patch = { supplier: known, supplierText: known.name };
+    const patch = { supplier: known, supplierText: known.name, newSupplier: null };
     const current = (values.supplier?.name ?? values.supplierText).trim();
     if (supplier.applied && supplierEmpty) fill("supplier", patch, supplier.band);
     else if (supplierEmpty)
@@ -302,11 +330,24 @@ export function withSuggestions(
         fill: patch,
         band: supplier.band,
       };
-  } else if (supplier?.detected_name?.trim() && supplierEmpty && canCreateSupplier) {
-    // not on the list: the name goes straight into the Suppliers box (owner, 2026-11-23) - the
-    // box's own "+ Add" makes it a supplier; nothing is created here
-    detectedName = supplier.detected_name.trim();
-    fill("supplier", { supplier: null, supplierText: detectedName }, "medium");
+  } else if (supplier?.detected_name?.trim() && supplierEmpty) {
+    // not on the list: the name goes straight into the Suppliers box (owner, 2026-11-23) and, with
+    // the API's signed token, is added when the line is saved - by anyone who may add the line
+    // (the user, 2026-11-23); nothing is created here. Without a token (an older API) the box's own
+    // "+ Add" makes it a supplier, for those who may add one.
+    const name = supplier.detected_name.trim();
+    const token = supplier.new_supplier_token ?? "";
+    if (token) {
+      detectedName = name;
+      fill(
+        "supplier",
+        { supplier: null, supplierText: name, newSupplier: { name, token } },
+        "medium",
+      );
+    } else if (canCreateSupplier) {
+      detectedName = name;
+      fill("supplier", { supplier: null, supplierText: name, newSupplier: null }, "medium");
+    }
   }
 
   // The account: by its id from the company's expense accounts only.
@@ -349,7 +390,9 @@ export function withSuggestions(
     );
   if (detectedName)
     parts.push(
-      `The receipt names a supplier that is not in your list: ${detectedName}. It is in the Suppliers box for you to add or change.`,
+      values.newSupplier
+        ? `The receipt names a supplier that is not in your list: ${detectedName}. It is added as a new contact when you save this expense.`
+        : `The receipt names a supplier that is not in your list: ${detectedName}. It is in the Suppliers box for you to add or change.`,
     );
   if (s.exchange && filled.includes("amount"))
     parts.push(
@@ -364,7 +407,7 @@ export function withSuggestions(
 
 const CLEARED: Record<SuggestedField, Partial<EntryValues>> = {
   amount: { amount: "" },
-  supplier: { supplier: null, supplierText: "" },
+  supplier: { supplier: null, supplierText: "", newSupplier: null },
   account: { account: null, accountText: "" },
   description: { description: "" },
 };

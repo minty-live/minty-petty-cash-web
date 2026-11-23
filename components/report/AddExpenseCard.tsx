@@ -35,8 +35,11 @@ import {
   cleared,
   edited,
   entryState,
+  NEW_SUPPLIER_DETAIL,
+  NEW_SUPPLIER_TOKEN,
   rateMissingText,
   readerOff,
+  readSupplier,
   usedNote,
   showedAnything,
   withoutSuggestions,
@@ -90,6 +93,7 @@ function lineValues(line: ExpenseLine): EntryValues {
     supplier: line.supplier,
     accountText: line.account?.name ?? "",
     account: line.account,
+    newSupplier: null,
   };
 }
 
@@ -206,6 +210,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
     entryState(start ? start.values : line ? lineValues(line) : undefined),
   );
   const { amount, description, supplierText, supplier, accountText, account } = entry.values;
+  // the receipt's supplier the company lacks, added by the API when the line is saved (2026-11-23)
+  const newSupplier = readSupplier(entry.values);
   const change = (field: SuggestedField, patch: Partial<EntryValues>) =>
     setEntry((state) => edited(state, field, patch));
   const amountInput = useAmountInput({
@@ -277,7 +283,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const holdsInput =
     file !== null ||
     (line
-      ? Object.keys(lineEdits(line, { amount, description, supplier, account })).length > 0
+      ? Object.keys(lineEdits(line, { amount, description, supplier, account })).length > 0 ||
+        newSupplier !== null
       : [amount, description, supplierText, accountText].some((v) => (v ?? "").trim() !== ""));
   const onDirtyRef = useRef(onDirty);
   useEffect(() => {
@@ -323,7 +330,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
     });
 
   function pickSupplier(s: Supplier) {
-    change("supplier", { supplier: s, supplierText: s.name });
+    change("supplier", { supplier: s, supplierText: s.name, newSupplier: null });
     clearError("supplier");
   }
 
@@ -349,7 +356,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
             id={`${inputId}_suggested`}
             field={field}
             band={band}
-            detail={field === "amount" ? convertedDetail : null}
+            detail={
+              field === "amount"
+                ? convertedDetail
+                : field === "supplier" && newSupplier
+                  ? NEW_SUPPLIER_DETAIL
+                  : null
+            }
             onClear={() => {
               setEntry((state) => cleared(state, field));
               document.getElementById(inputId)?.focus();
@@ -414,12 +427,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
       amount,
       supplierText,
       supplier,
+      newSupplier,
       accountText,
       account,
       file,
     }).filter((field) => !(field === "file" && keepsReceipt && !file));
     setErrors(new Set(missing));
-    if (missing.length > 0 || !supplier || !account || (!file && !keepsReceipt)) {
+    if (missing.length > 0 || (!supplier && !newSupplier) || !account || (!file && !keepsReceipt)) {
       toast("Please fill out the Required Fields", "error");
       return false;
     }
@@ -431,7 +445,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
     form.append("transaction_date", day);
     form.append("amount", String(parseMoney(amount)));
     form.append("description", description);
-    form.append("supplier_id", supplier.id);
+    if (supplier) form.append("supplier_id", supplier.id);
+    else if (newSupplier) form.append(NEW_SUPPLIER_TOKEN, newSupplier.token);
     form.append("account_id", account.id);
     form.append("receipt", file, file.name);
     if (converted)
@@ -466,6 +481,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
         { method: "POST", form },
       );
       setBusy(null);
+      if (form.has(NEW_SUPPLIER_TOKEN) && answer.line.supplier)
+        onSupplierCreated(answer.line.supplier);
       onAdded(answer.line, answer.total);
       toast("Expense added successfully!", "success");
       return true;
@@ -487,6 +504,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
   /** Edit Expense's Save: only the changed fields, and a picked file as the new receipt. */
   async function save(saved: ExpenseLine, newReceipt: File | null): Promise<boolean> {
     const changes = lineEdits(saved, { amount, description, supplier, account });
+    if (newSupplier) changes[NEW_SUPPLIER_TOKEN] = newSupplier.token;
     if (Object.keys(changes).length === 0 && !newReceipt) {
       onCancel();
       return true;
@@ -513,6 +531,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
         { method: "PATCH", form },
       );
       setBusy(null);
+      if (form.has(NEW_SUPPLIER_TOKEN) && answer.line.supplier)
+        onSupplierCreated(answer.line.supplier);
       onSaved?.(answer.line, answer.total);
       toast("Expense updated successfully!", "success");
       return true;
@@ -660,6 +680,9 @@ export function AddExpenseCard(props: AddExpenseProps) {
               change("supplier", {
                 supplierText: text,
                 ...(supplier && text.trim() !== supplier.name ? { supplier: null } : {}),
+                ...(entry.values.newSupplier && text.trim() !== entry.values.newSupplier.name
+                  ? { newSupplier: null }
+                  : {}),
               });
               clearError("supplier");
             }}
@@ -719,7 +742,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
               type="button"
               onClick={() => {
                 setNewContact(null);
-                change("supplier", { supplierText: "", supplier: null });
+                change("supplier", { supplierText: "", supplier: null, newSupplier: null });
               }}
               className="flex-1 rounded-flask-xl border-2 border-flask-secondary-edge px-4 py-2 text-sm font-medium text-flask-secondary-ink transition-colors hover:bg-flask-teal-soft"
             >

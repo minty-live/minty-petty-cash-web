@@ -8,6 +8,7 @@ import {
   noteAnswer,
   readerOff,
   readingCopy,
+  readSupplier,
   resetReaderLatch,
   suggestedText,
   suggestionsOf,
@@ -70,6 +71,7 @@ describe("an answer on an empty card", () => {
       supplier: { id: "c3", name: "Wellcome" },
       accountText: "Printing & Stationery",
       account: ACCOUNTS[1],
+      newSupplier: null,
     });
     expect(next.marks).toEqual({
       amount: "high",
@@ -163,6 +165,52 @@ describe("an answer on an empty card", () => {
     const cannot = withSuggestions(entryState(), unknown, { ...CTX, canCreateSupplier: false });
     expect(cannot.detectedName).toBeNull();
     expect(cannot.values.supplierText).toBe("");
+  });
+
+  it("with the API's token, the name is a new contact the save adds - for anyone (2026-11-23)", () => {
+    const unknown: Suggestions = {
+      supplier: {
+        value: "",
+        confidence: 0,
+        band: "medium",
+        applied: false,
+        contact_id: "",
+        detected_name: "Kwok Transport",
+        new_supplier_token: "signed",
+      },
+    };
+    for (const canCreateSupplier of [true, false]) {
+      const next = withSuggestions(entryState(), unknown, { ...CTX, canCreateSupplier });
+      expect(next.values.supplierText).toBe("Kwok Transport");
+      expect(next.values.newSupplier).toEqual({ name: "Kwok Transport", token: "signed" });
+      expect(readSupplier(next.values)).toEqual({ name: "Kwok Transport", token: "signed" });
+      expect(next.marks.supplier).toBe("medium");
+      expect(next.announcement).toContain(
+        "The receipt names a supplier that is not in your list: Kwok Transport. It is added as a new contact when you save this expense.",
+      );
+    }
+  });
+
+  it("the new contact goes once the box no longer holds its name, or another is picked or cleared", () => {
+    const next = withSuggestions(
+      entryState(),
+      {
+        supplier: {
+          value: "",
+          confidence: 0,
+          band: "medium",
+          applied: false,
+          contact_id: "",
+          detected_name: "Kwok Transport",
+          new_supplier_token: "signed",
+        },
+      },
+      CTX,
+    );
+    expect(readSupplier({ ...next.values, supplierText: "Kwok" })).toBeNull();
+    expect(readSupplier({ ...next.values, supplier: SUPPLIERS[0] })).toBeNull();
+    expect(cleared(next, "supplier").values.newSupplier).toBeNull();
+    expect(withoutSuggestions(next).values.newSupplier).toBeNull();
   });
 
   it("adds a far-off receipt date to the announcement, and never blocks anything", () => {

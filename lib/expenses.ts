@@ -132,6 +132,8 @@ export type AddForm = {
   amount: string;
   supplierText: string;
   supplier: Supplier | null;
+  /** A supplier the receipt reader read and the company lacks: the API adds it on save. */
+  newSupplier?: { name: string } | null;
   accountText: string;
   account: Account | null;
   file: File | null;
@@ -141,12 +143,15 @@ export type RequiredField = "amount" | "supplier" | "account" | "file";
 
 /**
  * The fields Add refuses (Flask's `addExpense`), each drawn with a red border: an amount of 0, a
- * supplier or an account not chosen from its list (or its text changed since), no receipt.
+ * supplier or an account not chosen from its list (or its text changed since), no receipt. The
+ * receipt reader's new supplier counts while the box still holds its name (the user, 2026-11-23).
  */
 export function missingFields(form: AddForm): RequiredField[] {
   const missing: RequiredField[] = [];
   if (parseMoney(form.amount) === 0) missing.push("amount");
-  if (!form.supplier || form.supplierText.trim() !== form.supplier.name) missing.push("supplier");
+  const read = !form.supplier && form.newSupplier?.name === form.supplierText.trim();
+  if (!read && (!form.supplier || form.supplierText.trim() !== form.supplier.name))
+    missing.push("supplier");
   if (!form.account || form.accountText.trim() !== form.account.name) missing.push("account");
   if (!form.file || form.file.size === 0) missing.push("file");
   return missing;
