@@ -1144,11 +1144,14 @@ test("the reader offers a different reading and an unknown supplier, and changes
   await page.getByRole("button", { name: "Use the value from the receipt" }).click();
   await expect(amount).toHaveValue("48.80");
 
-  await expect(
-    page.getByText('Receipt says "Kwok Transport", which is not in your supplier list.'),
-  ).toBeVisible();
+  // owner, 2026-11-23: the name goes straight into the Suppliers box - no Add button; the box's own
+  // "+ Add" makes it a supplier, and nothing is created until the person does
+  const supplierBox = page.getByRole("combobox", { name: /Suppliers/ });
+  await expect(supplierBox).toHaveValue("Kwok Transport");
+  await expect(page.getByRole("button", { name: /as a new supplier/ })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
-  await page.getByRole("button", { name: 'Add "Kwok Transport" as a new supplier' }).click();
+  await supplierBox.click();
+  await page.getByText("+ Add 'Kwok Transport' as a new contact").click();
   await expect(page.getByRole("textbox", { name: /New Contact/ })).toHaveValue("Kwok Transport");
   expect(created).toBe(0);
 });

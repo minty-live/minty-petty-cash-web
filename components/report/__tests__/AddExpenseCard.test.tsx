@@ -301,7 +301,7 @@ describe("the receipt reader in Add New Expense", () => {
     expect(description()).toHaveValue("");
   });
 
-  it("offers an unknown supplier for New Contact, and creates nothing itself", async () => {
+  it("fills an unknown supplier straight into the box - no Add button - and creates nothing itself", async () => {
     const calls = api({
       suggestions: {
         supplier: {
@@ -317,14 +317,16 @@ describe("the receipt reader in Add New Expense", () => {
     });
     show();
     await attachAndRead(png());
-    expect(
-      await screen.findByText('Receipt says "Kwok Transport", which is not in your supplier list.'),
-    ).toBeVisible();
-    await userEvent.click(
-      screen.getByRole("button", { name: 'Add "Kwok Transport" as a new supplier' }),
-    );
+    // owner, 2026-11-23: the name goes straight into the Suppliers box, marked as a suggestion
+    await waitFor(() => expect(supplier()).toHaveValue("Kwok Transport"));
+    expect(supplier()).toHaveAccessibleDescription("Supplier suggested — please check");
+    expect(screen.queryByRole("button", { name: /as a new supplier/ })).toBeNull();
+    expect(screen.queryByText(/which is not in your supplier list/)).toBeNull();
+    // a click on the box offers to add that name; the person's press opens New Contact
+    await userEvent.click(supplier());
+    await userEvent.click(await screen.findByText("+ Add 'Kwok Transport' as a new contact"));
     expect(screen.getByRole("textbox", { name: /New Contact/ })).toHaveValue("Kwok Transport");
-    expect(calls.suppliers).toEqual([]);
+    expect(calls.suppliers).toEqual([]); // nothing is created until the person adds it
   });
 
   it("switched off ('disabled'), it says nothing and is not asked again this session", async () => {
@@ -695,6 +697,8 @@ describe("a receipt in another currency", () => {
     await attachAndRead(png());
     await waitFor(() => expect(amount()).toHaveValue("96.82"));
     expect(calls.reads[0].get("transaction_date")).toBe("2026-10-13");
+    // owner, 2026-11-23: the original amount and the rate follow the description
+    expect(description()).toHaveValue("Copy paper · USD 12.34 Exchange Rate 7.846");
     expect(amount()).toHaveAccessibleDescription(
       "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate, the last business day before 15 Nov 2026).",
     );

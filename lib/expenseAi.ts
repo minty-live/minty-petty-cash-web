@@ -70,6 +70,14 @@ export type Suggestions = {
   exchange_failed?: { currency?: string };
 };
 
+/**
+ * "PHP 10,000.00 Exchange Rate 0.13456" (owner, 2026-11-23): the receipt's amount in its own
+ * currency and the rate used, for the description. A plain space - it is saved and sent to Xero.
+ */
+export function exchangeText(ex: Exchange): string {
+  return `${ex.original_currency} ${formatAmount(ex.original_amount, 2)} Exchange Rate ${ex.rate}`;
+}
+
 /** No rate for the receipt's currency (owner, 2026-11-19): the amount is the person's to type. */
 export function rateMissingText(currency: string, code: string | null): string {
   return code
@@ -262,10 +270,15 @@ export function withSuggestions(
       };
   }
 
-  // The description: filled only, never argued with (Flask's rule).
+  // The description: filled only, never argued with (Flask's rule). A converted amount this read
+  // filled adds its currency and rate after it (owner, 2026-11-23): "Taxi · PHP 10,000.00 Exchange
+  // Rate 0.13456" - or the conversion alone when nothing was read.
   const description = s.description;
-  if (description?.applied && description.value && emptyText(values.description))
-    fill("description", { description: description.value }, description.band);
+  const said = description?.applied && description.value ? description.value : "";
+  const conversion = s.exchange && filled.includes("amount") ? exchangeText(s.exchange) : "";
+  const text = [said, conversion].filter(Boolean).join(" · ");
+  if (text && emptyText(values.description))
+    fill("description", { description: text }, said ? description!.band : "medium");
 
   // The supplier: by its id from the company's list only.
   const supplier = s.supplier;
@@ -290,7 +303,10 @@ export function withSuggestions(
         band: supplier.band,
       };
   } else if (supplier?.detected_name?.trim() && supplierEmpty && canCreateSupplier) {
+    // not on the list: the name goes straight into the Suppliers box (owner, 2026-11-23) - the
+    // box's own "+ Add" makes it a supplier; nothing is created here
     detectedName = supplier.detected_name.trim();
+    fill("supplier", { supplier: null, supplierText: detectedName }, "medium");
   }
 
   // The account: by its id from the company's expense accounts only.
@@ -333,7 +349,7 @@ export function withSuggestions(
     );
   if (detectedName)
     parts.push(
-      `The receipt names a supplier that is not in your list: ${detectedName}. You can add it as a new supplier.`,
+      `The receipt names a supplier that is not in your list: ${detectedName}. It is in the Suppliers box for you to add or change.`,
     );
   if (s.exchange && filled.includes("amount"))
     parts.push(

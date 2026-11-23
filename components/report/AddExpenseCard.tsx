@@ -38,7 +38,6 @@ import {
   rateMissingText,
   readerOff,
   usedNote,
-  withoutDetectedName,
   showedAnything,
   withoutSuggestions,
   withSuggestions,
@@ -665,7 +664,9 @@ export function AddExpenseCard(props: AddExpenseProps) {
               clearError("supplier");
             }}
             listFor={(text, how) => {
-              if (how === "click" || !text.trim()) {
+              // a click shows every supplier - unless the box holds a name no supplier has (the
+              // receipt's, owner 2026-11-23), which opens on its own search with its "+ Add"
+              if ((how === "click" && supplier) || !text.trim()) {
                 // the note from the moment the list opens (owner, 2026-11-12; onboarding's wording),
                 // so it opens even before the company has a supplier
                 const all = supplierOptions(
@@ -685,17 +686,6 @@ export function AddExpenseCard(props: AddExpenseProps) {
             }}
           />
           {readerExtras("supplier", "expense_contact")}
-          {entry.detectedName ? (
-            <ReceiptNote
-              text={`Receipt says "${entry.detectedName}", which is not in your supplier list.`}
-              action={`Add "${entry.detectedName}" as a new supplier`}
-              onAction={() => {
-                // it fills the New Contact box; Create stays the person's own press
-                setNewContact(entry.detectedName);
-                setEntry(withoutDetectedName);
-              }}
-            />
-          ) : null}
         </div>
       ) : (
         <div className="mb-4 rounded-flask-xl border border-flask-gray-300 bg-flask-white p-6 shadow-flask-lg">
@@ -973,7 +963,7 @@ function SearchField({
           autoComplete="off"
           placeholder={placeholder}
           value={text}
-          onClick={() => show(listFor("", "click"))}
+          onClick={() => show(listFor(text, "click"))}
           onChange={(e) => {
             onText(e.target.value);
             show(listFor(e.target.value, "typed"));

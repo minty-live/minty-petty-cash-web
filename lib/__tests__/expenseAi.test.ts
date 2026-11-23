@@ -138,7 +138,7 @@ describe("an answer on an empty card", () => {
     expect(next.marks).toEqual({});
   });
 
-  it("offers a supplier name that is not on the list for New Contact - only to someone who may add one", () => {
+  it("puts a supplier name that is not on the list straight into the Suppliers box - only for someone who may add one", () => {
     const unknown: Suggestions = {
       supplier: {
         value: "",
@@ -150,15 +150,19 @@ describe("an answer on an empty card", () => {
       },
     };
     const next = withSuggestions(entryState(), unknown, CTX);
-    expect(next.detectedName).toBe("Kwok Transport");
+    // owner, 2026-11-23: filled in the box, no Add button - the box's own "+ Add" makes it
+    expect(next.values.supplierText).toBe("Kwok Transport");
     expect(next.values.supplier).toBeNull();
+    expect(next.marks.supplier).toBe("medium");
+    expect(next.detectedName).toBe("Kwok Transport");
     expect(next.announcement).toBe(
-      "The receipt names a supplier that is not in your list: Kwok Transport. You can add it as a new supplier.",
+      "Suggestions from the receipt filled 1 field: supplier. Please check them before adding. " +
+        "The receipt names a supplier that is not in your list: Kwok Transport. It is in the Suppliers box for you to add or change.",
     );
     expect(withoutDetectedName(next).detectedName).toBeNull();
-    expect(
-      withSuggestions(entryState(), unknown, { ...CTX, canCreateSupplier: false }).detectedName,
-    ).toBeNull();
+    const cannot = withSuggestions(entryState(), unknown, { ...CTX, canCreateSupplier: false });
+    expect(cannot.detectedName).toBeNull();
+    expect(cannot.values.supplierText).toBe("");
   });
 
   it("adds a far-off receipt date to the announcement, and never blocks anything", () => {
@@ -331,5 +335,49 @@ describe("the copy sent for reading", () => {
     expect(await readingCopy(pdf)).toBe(pdf);
     const png = new File(["x"], "taxi.png", { type: "image/png" });
     expect(await readingCopy(png)).toBe(png);
+  });
+});
+
+// Owner, 2026-11-23: a converted amount writes its currency and rate after the description.
+describe("a receipt in another currency", () => {
+  const converted = (over: Partial<Suggestions> = {}): Suggestions => ({
+    ...answer("high"),
+    amount: read("1345.60", "high"),
+    currency: "PHP",
+    exchange: {
+      original_currency: "PHP",
+      original_amount: "10000.00",
+      rate: "0.13456",
+      rate_date: "2026-11-21",
+      date_basis: "receipt",
+      source: "Frankfurter",
+    },
+    ...over,
+  });
+
+  it("adds the original amount and the rate after the description", () => {
+    const next = withSuggestions(entryState(), converted(), CTX);
+    expect(next.values.amount).toBe("1,345.60");
+    expect(next.values.description).toBe("Courier delivery · PHP 10,000.00 Exchange Rate 0.13456");
+    expect(next.marks.description).toBe("high");
+  });
+
+  it("with no description read, the description is the conversion alone", () => {
+    const next = withSuggestions(
+      entryState(),
+      converted({ description: read("", "low", false) }),
+      CTX,
+    );
+    expect(next.values.description).toBe("PHP 10,000.00 Exchange Rate 0.13456");
+    expect(next.marks.description).toBe("medium");
+  });
+
+  it("never touches a typed description, and adds nothing when the amount wasn't filled", () => {
+    const typed = edited(entryState(), "description", { description: "Mine" });
+    expect(withSuggestions(typed, converted(), CTX).values.description).toBe("Mine");
+    const amountTyped = edited(entryState(), "amount", { amount: "5" });
+    expect(withSuggestions(amountTyped, converted(), CTX).values.description).toBe(
+      "Courier delivery",
+    );
   });
 });
