@@ -47,6 +47,8 @@ const nextConfig: NextConfig = {
    * for, because Node resolves `localhost` to ::1 first and stalls ~2 s per request.
    */
   allowedDevOrigins: ["127.0.0.1"],
+  /** `next upgrade --agent` reads this: security releases only (2026-11-23, 16.4.2 → 16.4.6). */
+  experimental: { agentUpgrade: "security" },
 };
 
 export default nextConfig;
