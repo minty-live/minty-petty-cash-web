@@ -36,6 +36,7 @@ import {
   edited,
   entryState,
   NEW_SUPPLIER_DETAIL,
+  readNameDetail,
   NEW_SUPPLIER_TOKEN,
   rateMissingText,
   readerOff,
@@ -236,6 +237,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
   // rate was found for
   const [exchange, setExchange] = useState<{ how: Exchange; converted: string } | null>(null);
   const [rateMissing, setRateMissing] = useState<string | null>(null);
+  // the supplier's name as the last read receipt prints it, said beside the picked contact
+  const [readName, setReadName] = useState<string | null>(null);
   // a card terminal slip alone (owner, 2026-11-19): nothing filled, and the card says why
   const [cardSlip, setCardSlip] = useState(false);
   const reader = useReceiptReader(
@@ -253,6 +256,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
       setExchange(
         how && suggestions.amount?.value ? { how, converted: suggestions.amount.value } : null,
       );
+      setReadName(suggestions.supplier?.read_name ?? null);
       const missing = exchangeFailedOf(suggestions);
       setRateMissing(missing);
       const showed = showedAnything(next) || missing !== null;
@@ -361,7 +365,9 @@ export function AddExpenseCard(props: AddExpenseProps) {
                 ? convertedDetail
                 : field === "supplier" && newSupplier
                   ? NEW_SUPPLIER_DETAIL
-                  : null
+                  : field === "supplier" && supplier
+                    ? readNameDetail(readName, supplier.name)
+                    : null
             }
             onClear={() => {
               setEntry((state) => cleared(state, field));

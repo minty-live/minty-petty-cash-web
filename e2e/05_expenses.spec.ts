@@ -1015,6 +1015,31 @@ for (const size of [
     await expect(toast(page, "Expense added successfully!")).toBeVisible();
     await expect(page.getByText(AI_CAUTION)).toHaveCount(0);
   });
+
+  // The user, 2026-11-23: "滬江 -> Wu Kong" - the receipt's own name beside a "similar" pick.
+  test(`a supplier picked as similar names what the receipt prints (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    const read = {
+      ...SUGGESTIONS,
+      supplier: { ...SUGGESTIONS.supplier, read_name: "惠康 超級市場 Central" },
+    };
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) => route.fulfill({ json: { suggestions: read, reason: null } }),
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page);
+    await readButton(page).click();
+    const supplier = page.getByRole("combobox", { name: /Suppliers/ });
+    await expect(supplier).toHaveValue("Wellcome");
+    const line = page.getByText('The receipt reads "惠康 超級市場 Central".', { exact: false });
+    await expect(line).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    await line.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-read-name-${size.width}.png` });
+  });
 }
 
 // Owner, 2026-11-19: a card terminal slip alone fills nothing and says why.

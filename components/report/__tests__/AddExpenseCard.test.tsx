@@ -308,6 +308,28 @@ describe("the receipt reader in Add New Expense", () => {
     expect(description()).toHaveValue("");
   });
 
+  it("names what the receipt printed beside a supplier picked as similar, and only then", async () => {
+    // the user, 2026-11-23: "滬江 -> Wu Kong" - a wrong "similar" pick is easy to spot
+    const pick = (read_name: string) => ({
+      suggestions: { supplier: { ...SUGGESTIONS.supplier, read_name } },
+      reason: null,
+    });
+    api(pick("惠康 Wellcome Central"), pick("WELLCOME"));
+    show();
+    await attachAndRead(png("one.png"));
+    await waitFor(() => expect(supplier()).toHaveValue("Wellcome"));
+    expect(supplier()).toHaveAccessibleDescription(
+      'Supplier suggested. The receipt reads "惠康 Wellcome Central".',
+    );
+    // the same name as the contact says nothing more
+    await attachAndRead(png("two.png"));
+    await waitFor(() => expect(supplier()).toHaveAccessibleDescription("Supplier suggested"));
+    // another supplier picked: the suggestion and its line go
+    await userEvent.click(supplier());
+    await userEvent.click(await screen.findByRole("option", { name: "ParknShop" }));
+    expect(supplier()).not.toHaveAccessibleDescription(/receipt reads/);
+  });
+
   it("fills an unknown supplier straight into the box - no Add button - and creates nothing itself", async () => {
     const calls = api({
       suggestions: {

@@ -62,6 +62,8 @@ export type Suggestions = {
   supplier?: ReadField & {
     contact_id?: string;
     detected_name?: string;
+    /** The supplier's name as the receipt prints it (the user, 2026-11-23). */
+    read_name?: string;
     /** The detected name signed for this company: Add/Save sends it and the API adds the supplier. */
     new_supplier_token?: string;
   };
@@ -123,6 +125,19 @@ export function readSupplier(values: EntryValues): NewSupplier | null {
 
 /** The form field Add/Save sends the read supplier's token in (`routes/expenses.py`). */
 export const NEW_SUPPLIER_TOKEN = "new_supplier_token";
+
+/**
+ * Said with the supplier's suggested line when the receipt prints another name than the picked
+ * contact's (the user, 2026-11-23: "滬江 -> Wu Kong" - a wrong "similar" pick is easy to spot);
+ * null when they are the same.
+ */
+export function readNameDetail(
+  readName: string | null | undefined,
+  supplier: string,
+): string | null {
+  const read = (readName ?? "").trim();
+  return read && !sameText(read, supplier) ? `The receipt reads "${read}".` : null;
+}
 
 /** Said with the supplier's suggested line while it is a new contact (the user, 2026-11-23). */
 export const NEW_SUPPLIER_DETAIL =
