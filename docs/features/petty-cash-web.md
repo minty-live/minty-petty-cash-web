@@ -296,7 +296,7 @@ What it keeps from Flask:
   - **What happens when it can't read** (owner, 2026-11-04): a started read that comes back with nothing to show - a failure reason, a cut connection, or no field filled, noted or offered - says so in one quiet line under the drop box, "I couldn't read this receipt. Enter the details yourself." (`role="status"`); a new receipt takes it away. A low-band reading offered as a note is not a failure. A `disabled`/`not_configured` answer stays silent and switches the reader off for the tab's session (`sessionStorage` `minty.pc.receipt-reader`).
   - **Announcements:** one polite live region says what was filled, what differs, and a receipt dated more than a week from the report.
   - The rules match `redesign`'s reader (`1b5cf99`); the look and the words are the classic page's.
-- **Expense Details** (a tap on a line): the receipt first, "Amount Paid", Contact Name, Description and Account (`<code> <account>`), and Close.
+- **Expense Details** (a tap on a line): the receipt first, "Amount Paid", Contact Name, Description and Account (`<code> <account>`), all in plain text ink (never coloured; the user, 2026-11-23), and Close.
 - **Delete Expense** (the bin): Flask's warning, Cancel / Delete, "Deleting Expense...".
 - **Flask's toasts and overlays**, word for word, and **Save & Next** (to Bank Deposit, in this app) / **Save & Exit**.
 

@@ -541,6 +541,11 @@ test("a line opens Expense Details with its receipt, which opens full screen", a
   const dialog = page.getByRole("dialog", { name: "Expense Details" });
   await expect(dialog.getByText("Amount Paid")).toBeVisible();
   await expect(dialog.getByText("HKD 1,200.50")).toBeVisible();
+  // an amount is plain text, never coloured (CLAUDE.md): the text ink, #16202e
+  await expect(dialog.getByText("HKD 1,200.50")).toHaveCSS("color", "rgb(22, 32, 46)");
+  // and so are the details beside it: no blue (the user, 2026-11-23)
+  for (const value of ["Wellcome", "Milk and <b>tea</b>", "429 General Expenses"])
+    await expect(dialog.getByText(value, { exact: true })).toHaveCSS("color", "rgb(22, 32, 46)");
   await expect(dialog).toContainText("Contact NameWellcome");
   await expect(dialog).toContainText("DescriptionMilk and <b>tea</b>");
   await expect(dialog).toContainText("Account429 General Expenses");

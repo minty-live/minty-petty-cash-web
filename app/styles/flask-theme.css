@@ -71,7 +71,6 @@
   --color-flask-blue-500: var(--color-status-info-ink);
   --color-flask-blue-600: var(--color-text-link);
   --color-flask-blue-800: var(--color-text-primary);
-  --color-flask-detail-ink: var(--color-status-info-ink);
 
   /* the Cash Count step (report/cash_count.html): the Total Cash Count ink, the shortage heading
      (red-800) and the surplus icon (green-500) */

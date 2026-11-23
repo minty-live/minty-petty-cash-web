@@ -774,7 +774,7 @@ export function ExpenseDetailsModal({
 
         <div className="text-center">
           <p className="mb-1 text-sm text-flask-gray-400">Amount Paid</p>
-          <p className="text-3xl font-bold text-flask-detail-ink [overflow-wrap:anywhere]">
+          <p className="text-3xl font-bold text-flask-ink [overflow-wrap:anywhere]">
             {formatMoney(line.amount, code)}
           </p>
         </div>
@@ -814,7 +814,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2">
       <span className="shrink-0 text-sm text-flask-gray-400">{label}</span>
-      <span className="min-w-0 break-words text-right text-sm font-semibold text-flask-detail-ink">
+      <span className="min-w-0 break-words text-right text-sm font-semibold text-flask-ink">
         {value}
       </span>
     </div>
