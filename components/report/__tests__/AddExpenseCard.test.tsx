@@ -423,9 +423,8 @@ describe("the receipt reader in Add New Expense", () => {
 });
 
 // Owner, 2026-11-19: once a read has filled a field, the caution sits under the fields until the
-// line is saved.
-const CAUTION =
-  "AI suggestions may be inaccurate. Please check every field against the receipt before saving.";
+// line is saved. One sentence since 2026-11-23 (owner).
+const CAUTION = "AI suggestions may be inaccurate.";
 
 describe("the caution under AI-filled fields", () => {
   it("shows under the fields once a read fills them, read with Add, and stays while the person edits", async () => {
@@ -668,8 +667,6 @@ describe("the duplicate reminder before a line is saved (owner's decisions doc D
 });
 
 // Owner, 2026-11-19: a receipt in another currency comes back converted at Frankfurter's rate.
-const FX_CAUTION =
-  "The exchange rate is a central bank reference rate and may differ from the amount actually charged.";
 const EXCHANGE = {
   original_currency: "USD",
   original_amount: "12.34",
@@ -702,9 +699,8 @@ describe("a receipt in another currency", () => {
     expect(amount()).toHaveAccessibleDescription(
       "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate, the last business day before 15 Nov 2026).",
     );
-    expect(document.getElementById("expense_ai_caution")).toHaveTextContent(
-      `${CAUTION} ${FX_CAUTION}`,
-    );
+    // owner, 2026-11-23: the caution stays one sentence, no exchange-rate sentence
+    expect(document.getElementById("expense_ai_caution")?.textContent).toBe(CAUTION);
 
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(calls.adds).toHaveLength(1));
@@ -730,7 +726,6 @@ describe("a receipt in another currency", () => {
     await userEvent.clear(amount());
     await userEvent.type(amount(), "100");
     expect(screen.getByText(CAUTION)).toBeInTheDocument();
-    expect(screen.queryByText(new RegExp(FX_CAUTION.slice(0, 30)))).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(calls.adds).toHaveLength(1));
@@ -755,7 +750,6 @@ describe("a receipt in another currency", () => {
     expect(
       screen.getByText("I couldn't get an exchange rate for TWD. Enter the amount in HKD."),
     ).toBeInTheDocument();
-    expect(screen.queryByText(new RegExp(FX_CAUTION.slice(0, 30)))).toBeNull();
   });
 });
 

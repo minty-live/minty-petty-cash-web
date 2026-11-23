@@ -764,7 +764,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
         {readerExtras("account", "expense_account_code")}
       </div>
 
-      {aiFilled ? <AiCaution id={AI_CAUTION_ID} exchange={converted !== null} /> : null}
+      {aiFilled ? <AiCaution id={AI_CAUTION_ID} /> : null}
 
       <div className="flex gap-3">
         <button

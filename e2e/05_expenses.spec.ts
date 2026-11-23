@@ -971,8 +971,7 @@ test("the receipt reader: Flask's reading box, then suggestions in the empty fie
 });
 
 // Owner, 2026-11-19: the caution under the fields once a read filled them, until the line is saved.
-const AI_CAUTION =
-  "AI suggestions may be inaccurate. Please check every field against the receipt before saving.";
+const AI_CAUTION = "AI suggestions may be inaccurate."; // one sentence since 2026-11-23 (owner)
 
 for (const size of [
   { width: 360, height: 740 },
@@ -998,7 +997,15 @@ for (const size of [
     await expect(caution).toBeVisible();
     const add = page.getByRole("button", { name: "Add", exact: true });
     await expect(add).toHaveAccessibleDescription(AI_CAUTION);
-    expect((await caution.boundingBox())!.y).toBeLessThan((await add.boundingBox())!.y);
+    // both measured at the same moment: the page may still be scrolling after the read
+    const addHandle = await add.elementHandle();
+    expect(
+      await caution.evaluate(
+        (note, button) =>
+          note.getBoundingClientRect().bottom <= button!.getBoundingClientRect().top,
+        addHandle,
+      ),
+    ).toBe(true);
     await expectNoHorizontalScroll(page);
     await caution.scrollIntoViewIfNeeded();
     if (process.env.E2E_SHOTS)
@@ -1035,8 +1042,6 @@ test("a card slip alone fills nothing and says why (360px)", async ({ page }) =>
 });
 
 // Owner, 2026-11-19: a receipt in another currency comes back converted at Frankfurter's rate.
-const FX_CAUTION =
-  "The exchange rate is a central bank reference rate and may differ from the amount actually charged.";
 
 for (const size of [
   { width: 360, height: 740 },
@@ -1090,7 +1095,7 @@ for (const size of [
     await expect(amount).toHaveAccessibleDescription(
       "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate).",
     );
-    const caution = page.getByText(FX_CAUTION, { exact: false });
+    const caution = page.getByText(AI_CAUTION, { exact: true });
     await expect(caution).toBeVisible();
     await expectNoHorizontalScroll(page);
     await amount.scrollIntoViewIfNeeded();
