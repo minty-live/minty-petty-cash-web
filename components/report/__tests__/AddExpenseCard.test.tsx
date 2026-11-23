@@ -781,7 +781,7 @@ describe("a receipt in another currency", () => {
     await waitFor(() => expect(amount()).toHaveValue("96.82"));
     expect(calls.reads[0].get("transaction_date")).toBe("2026-10-13");
     // owner, 2026-11-23: the original amount and the rate follow the description
-    expect(description()).toHaveValue("Copy paper · USD 12.34 Exchange Rate 7.846");
+    expect(description()).toHaveValue("Copy paper (USD 12.34 @7.846)");
     expect(amount()).toHaveAccessibleDescription(
       "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate, the last business day before 15 Nov 2026).",
     );
@@ -839,28 +839,77 @@ describe("a receipt in another currency", () => {
   });
 });
 
-// Owner, 2026-11-19: a card terminal slip alone fills nothing and says why.
-const CARD_SLIP =
-  "A card slip alone is not valid evidence. Please attach a receipt that shows what was bought.";
+// Owner's launch decisions, 2026-11-23 (IRD "A Guide to Keeping Business Records").
+const NO_EVIDENCE =
+  "We can't tell what this payment was for, so this document isn't sufficient as a receipt. Please attach a receipt or invoice that shows the goods or services.";
+const SEVERAL = "This file contains more than one receipt. Please upload each receipt separately.";
+const AMOUNT_EMPTY = "The amount is still empty. Add the amount to continue.";
+const SUPPLIER_EMPTY = "The supplier is still empty. Choose a supplier to continue.";
+const ACCOUNT_EMPTY = "The account code is still empty. Choose an account code to continue.";
 
-describe("a card slip alone", () => {
-  it("fills nothing and says why - not the failure line, not the caution", async () => {
-    api({ suggestions: null, reason: "card_slip_only" });
+describe("a receipt that doesn't say what was paid for", () => {
+  it("fills nothing and says why - not the failure line, not the caution; the receipt stays", async () => {
+    api({ suggestions: null, reason: "no_description" });
     show();
     await attachAndRead(png("slip.png"));
-    expect(await screen.findByText(CARD_SLIP)).toHaveAttribute("role", "status");
+    expect(await screen.findByText(NO_EVIDENCE)).toHaveAttribute("role", "status");
     expect(amount()).toHaveValue("");
     expect(description()).toHaveValue("");
     expect(screen.queryByText(FAILED)).toBeNull();
     expect(screen.queryByText(CAUTION)).toBeNull();
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled(); // never blocks Add
+    expect(screen.queryByText(AMOUNT_EMPTY)).toBeNull(); // a refused read marks nothing
   });
 
   it("another receipt takes the sentence away", async () => {
-    api({ suggestions: null, reason: "card_slip_only" });
+    api({ suggestions: null, reason: "no_description" });
     show();
     await attachAndRead(png("slip.png"));
-    await screen.findByText(CARD_SLIP);
+    await screen.findByText(NO_EVIDENCE);
     await attach(png("receipt.png"));
-    expect(screen.queryByText(CARD_SLIP)).toBeNull();
+    expect(screen.queryByText(NO_EVIDENCE)).toBeNull();
+  });
+});
+
+describe("several receipts in one file", () => {
+  it("asks for one at a time in an OK-only question, and fills nothing", async () => {
+    api({ suggestions: null, reason: "several_documents" });
+    show();
+    await attachAndRead(png("two.png"));
+    const dialog = await screen.findByRole("dialog", { name: "More than one receipt" });
+    expect(dialog).toHaveTextContent(SEVERAL);
+    expect(within(dialog).getAllByRole("button")).toHaveLength(1);
+    expect(amount()).toHaveValue("");
+    expect(screen.queryByText(FAILED)).toBeNull();
+    await userEvent.click(within(dialog).getByRole("button", { name: "OK" }));
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getByRole("img", { name: "Uploaded receipt" })).toBeInTheDocument(); // it stays
+  });
+});
+
+describe("required fields the read left empty", () => {
+  it("turn red at once with their sentence, and typing takes it away", async () => {
+    api({ suggestions: { amount: SUGGESTIONS.amount, description: SUGGESTIONS.description } });
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    expect(screen.getByText(SUPPLIER_EMPTY)).toBeInTheDocument();
+    expect(screen.getByText(ACCOUNT_EMPTY)).toBeInTheDocument();
+    expect(supplier()).toHaveAttribute("aria-invalid", "true");
+    expect(supplier()).toHaveAccessibleDescription(expect.stringContaining(SUPPLIER_EMPTY));
+    expect(screen.queryByText(AMOUNT_EMPTY)).toBeNull(); // filled, so not red
+    expect(supplier()).not.toHaveFocus(); // focus moves only on a refused Add
+    await userEvent.type(supplier(), "Well");
+    expect(screen.queryByText(SUPPLIER_EMPTY)).toBeNull();
+    expect(screen.getByText(ACCOUNT_EMPTY)).toBeInTheDocument();
+  });
+
+  it("a read that fills every required field marks nothing", async () => {
+    api({ suggestions: SUGGESTIONS });
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    for (const text of [AMOUNT_EMPTY, SUPPLIER_EMPTY, ACCOUNT_EMPTY])
+      expect(screen.queryByText(text)).toBeNull();
   });
 });

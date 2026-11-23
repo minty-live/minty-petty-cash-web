@@ -35,7 +35,10 @@ import {
   cleared as sharedCleared,
   createReaderLatch,
   edited as sharedEdited,
+  exchangeNote,
+  noEvidenceText,
   readerState,
+  severalDocuments,
   usedNote as sharedUsedNote,
   withoutDetectedName as sharedWithoutDetectedName,
   withoutSuggestions as sharedWithoutSuggestions,
@@ -78,14 +81,6 @@ export type Suggestions = {
   /** No rate for the receipt's currency: the amount came back empty. */
   exchange_failed?: { currency?: string };
 };
-
-/**
- * "PHP 10,000.00 Exchange Rate 0.13456" (owner, 2026-11-23): the receipt's amount in its own
- * currency and the rate used, for the description. A plain space - it is saved and sent to Xero.
- */
-export function exchangeText(ex: Exchange): string {
-  return `${ex.original_currency} ${formatAmount(ex.original_amount, 2)} Exchange Rate ${ex.rate}`;
-}
 
 /** No rate for the receipt's currency (owner, 2026-11-19): the amount is the person's to type. */
 export function rateMissingText(currency: string, code: string | null): string {
@@ -224,10 +219,20 @@ export const READING_DETAIL =
 /** The one quiet failure line (owner, 2026-11-04; Part 11: the issue, then the action). */
 export const READ_FAILED = "I couldn't read this receipt. Enter the details yourself.";
 
-/** A card terminal slip alone (owner, 2026-11-19): the API fills nothing and the card says why. */
-export const REASON_CARD_SLIP = "card_slip_only";
-export const CARD_SLIP =
-  "A card slip alone is not valid evidence. Please attach a receipt that shows what was bought.";
+/**
+ * The owner's launch decisions (2026-11-23, after IRD's "A Guide to Keeping Business Records"): a
+ * receipt that doesn't say what was paid for (nothing filled, the card says why under the drop
+ * zone), and several receipts in one file (an OK-only question). The receipt stays either way.
+ */
+export const NO_EVIDENCE = noEvidenceText("receipt");
+export const SEVERAL_RECEIPTS = severalDocuments("receipt");
+
+/** A required field a read left empty, or Add refused (Part 11: the issue, then the action). */
+export const MISSING_TEXT = {
+  amount: "The amount is still empty. Add the amount to continue.",
+  supplier: "The supplier is still empty. Choose a supplier to continue.",
+  account: "The account code is still empty. Choose an account code to continue.",
+} as const;
 
 const hedge = (band: Band) => (band === "low" ? "might read" : "reads");
 
@@ -314,12 +319,12 @@ export function withSuggestions(
   }
 
   // The description: filled only, never argued with (Flask's rule). A converted amount this read
-  // filled adds its currency and rate after it (owner, 2026-11-23): "Taxi · PHP 10,000.00 Exchange
-  // Rate 0.13456" - or the conversion alone when nothing was read.
+  // filled adds its currency and rate after it (owner, 2026-11-23): "Taxi (PHP 10,000.00 @0.13456)"
+  // - or the conversion alone when nothing was read.
   const description = s.description;
   const said = description?.applied && description.value ? description.value : "";
-  const conversion = s.exchange && filled.includes("amount") ? exchangeText(s.exchange) : "";
-  const text = [said, conversion].filter(Boolean).join(" · ");
+  const conversion = s.exchange && filled.includes("amount") ? exchangeNote(s.exchange) : "";
+  const text = [said, conversion].filter(Boolean).join(" ");
   if (text && emptyText(values.description))
     fill("description", { description: text }, said ? description!.band : "medium");
 

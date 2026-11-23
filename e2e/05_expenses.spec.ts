@@ -1042,29 +1042,88 @@ for (const size of [
   });
 }
 
-// Owner, 2026-11-19: a card terminal slip alone fills nothing and says why.
-test("a card slip alone fills nothing and says why (360px)", async ({ page }) => {
-  await page.setViewportSize({ width: 360, height: 740 });
-  await openWith(page, expensesAnswer(), {
-    onExtract: (_req, route) =>
-      route.fulfill({ json: { suggestions: null, reason: "card_slip_only" } }),
+// The owner's launch decisions, 2026-11-23 (IRD "A Guide to Keeping Business Records").
+for (const size of [
+  { width: 360, height: 740 },
+  { width: 768, height: 1024 },
+  { width: 1440, height: 900 },
+]) {
+  test(`a receipt that doesn't say what was paid for fills nothing and says why (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) =>
+        route.fulfill({ json: { suggestions: null, reason: "no_description" } }),
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page, "slip.png");
+    await readButton(page).click();
+    const line = page.getByText(
+      "We can't tell what this payment was for, so this document isn't sufficient as a receipt. Please attach a receipt or invoice that shows the goods or services.",
+    );
+    await expect(line).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
+    await expect(
+      page.getByText("I couldn't read this receipt. Enter the details yourself."),
+    ).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+    await line.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-no-evidence-${size.width}.png` });
   });
-  await page.getByRole("button", { name: "Add New Expense" }).click();
-  await attachReceipt(page, "slip.png");
-  await readButton(page).click();
-  const line = page.getByText(
-    "A card slip alone is not valid evidence. Please attach a receipt that shows what was bought.",
-  );
-  await expect(line).toBeVisible();
-  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
-  await expect(
-    page.getByText("I couldn't read this receipt. Enter the details yourself."),
-  ).toHaveCount(0);
-  await expectNoHorizontalScroll(page);
-  await line.scrollIntoViewIfNeeded();
-  if (process.env.E2E_SHOTS)
-    await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-card-slip-360.png` });
-});
+
+  test(`several receipts in one file ask for one at a time (${size.width}px)`, async ({ page }) => {
+    await page.setViewportSize(size);
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) =>
+        route.fulfill({ json: { suggestions: null, reason: "several_documents" } }),
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page, "two.png");
+    await readButton(page).click();
+    const dialog = page.getByRole("dialog", { name: "More than one receipt" });
+    await expect(dialog).toContainText(
+      "This file contains more than one receipt. Please upload each receipt separately.",
+    );
+    await expectNoHorizontalScroll(page);
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-several-${size.width}.png` });
+    await dialog.getByRole("button", { name: "OK" }).click();
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+    await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
+  });
+
+  test(`required fields a read left empty are red with their sentence (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    const read = { amount: SUGGESTIONS.amount, description: SUGGESTIONS.description };
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) => route.fulfill({ json: { suggestions: read, reason: null } }),
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page);
+    await readButton(page).click();
+    await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
+    const supplierLine = page.getByText(
+      "The supplier is still empty. Choose a supplier to continue.",
+    );
+    await expect(supplierLine).toBeVisible();
+    await expect(
+      page.getByText("The account code is still empty. Choose an account code to continue."),
+    ).toBeVisible();
+    await expect(page.getByRole("combobox", { name: /Suppliers/ })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    );
+    await expectNoHorizontalScroll(page);
+    await supplierLine.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-red-${size.width}.png` });
+  });
+}
 
 // Owner, 2026-11-19: a receipt in another currency comes back converted at Frankfurter's rate.
 

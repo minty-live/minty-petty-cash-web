@@ -16,7 +16,7 @@ import { useAmountInput } from "@minty/shared/amountInput";
 
 import { useToast } from "@/components/flask/Toasts";
 import {
-  CardSlipLine,
+  NoEvidenceLine,
   ReadFailed,
   ReadingNotice,
   ReadReceiptButton,
@@ -28,6 +28,7 @@ import {
 import { DuplicateDialog } from "@/components/report/DuplicateDialog";
 import { ReceiptViewer, type ShownReceipt } from "@/components/report/ReceiptViewer";
 import { FieldMessage } from "@/components/report/ReportChrome";
+import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { parseMoney } from "@/lib/currencyInput";
 import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/duplicates";
@@ -35,12 +36,14 @@ import {
   cleared,
   edited,
   entryState,
+  MISSING_TEXT,
   NEW_SUPPLIER_DETAIL,
   readNameDetail,
   NEW_SUPPLIER_TOKEN,
   rateMissingText,
   readerOff,
   readSupplier,
+  SEVERAL_RECEIPTS,
   usedNote,
   showedAnything,
   withoutSuggestions,
@@ -71,6 +74,7 @@ import {
   exchangeFields,
   exchangeKept,
   exchangeOf,
+  type EvidenceRefusal,
   type Exchange,
   type ReaderStatus,
 } from "@minty/shared/reader";
@@ -239,8 +243,11 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const [rateMissing, setRateMissing] = useState<string | null>(null);
   // the supplier's name as the last read receipt prints it, said beside the picked contact
   const [readName, setReadName] = useState<string | null>(null);
-  // a card terminal slip alone (owner, 2026-11-19): nothing filled, and the card says why
-  const [cardSlip, setCardSlip] = useState(false);
+  // a receipt that isn't one record of a payment (owner, 2026-11-23): nothing filled, and the card
+  // says why - a line under the drop zone, or an OK-only question for several receipts
+  const [refused, setRefused] = useState<EvidenceRefusal | null>(null);
+  // the required fields shown red: after a refused Add, or (owner, 2026-11-23) left empty by a read
+  const [errors, setErrors] = useState<Set<RequiredField>>(new Set());
   const reader = useReceiptReader(
     (suggestions) => {
       const next = withSuggestions(entryRef.current, suggestions, {
@@ -260,12 +267,22 @@ export function AddExpenseCard(props: AddExpenseProps) {
       const missing = exchangeFailedOf(suggestions);
       setRateMissing(missing);
       const showed = showedAnything(next) || missing !== null;
-      if (showed) setAiFilled(true);
+      if (showed) {
+        setAiFilled(true);
+        // owner, 2026-11-23: a required field the read left empty is red at once, with its
+        // sentence (focus stays put - it moves only on a refused Add)
+        const empty = missingFields({
+          ...next.values,
+          newSupplier: next.values.newSupplier ?? null,
+          file: null,
+        }).filter((field) => field !== "file");
+        setErrors(new Set(empty));
+      }
       return showed;
     },
     onReaderStatus,
     day,
-    () => setCardSlip(true),
+    setRefused,
   );
   // the receipt and an object URL of it, made when it is picked and let go when it is replaced
   const [picked, setPicked] = useState<Picked | null>(() =>
@@ -308,7 +325,6 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const [newContact, setNewContact] = useState<string | null>(null);
   const newContactField = useRef<HTMLInputElement>(null);
   const newContactMessage = newContact === null ? null : newContactProblem(newContact);
-  const [errors, setErrors] = useState<Set<RequiredField>>(new Set());
   const [sending, setSending] = useState(false);
   // DUP1: the API found a line like this one; the question is open until Go back or Save anyway
   const [duplicate, setDuplicate] = useState<{
@@ -562,6 +578,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
     errors.has(field) && !(field !== "file" && entry.marks[field]);
   const border = (field: RequiredField) =>
     invalid(field) ? "border-flask-red-500" : "border-flask-gray-300";
+  // a red field's sentence under it (Part 11: the issue, then the action)
+  type Missing = keyof typeof MISSING_TEXT;
+  const missingId = (field: Missing) => (invalid(field) ? `expense_${field}_missing` : null);
+  const missingLine = (field: Missing) =>
+    invalid(field) ? (
+      <FieldMessage id={`expense_${field}_missing`}>{MISSING_TEXT[field]}</FieldMessage>
+    ) : null;
 
   return (
     <form
@@ -589,7 +612,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setAiFilled(false);
           setExchange(null);
           setRateMissing(null);
-          setCardSlip(false);
+          setRefused(null);
           // read only on "Read receipt" (owner, 2026-11-18)
           reader.cancel();
           setReadAsked(false);
@@ -598,13 +621,13 @@ export function AddExpenseCard(props: AddExpenseProps) {
       >
         {reader.reading ? <ReadingNotice /> : null}
         {reader.failed && !reader.reading ? <ReadFailed /> : null}
-        {cardSlip && !reader.reading ? <CardSlipLine /> : null}
+        {refused === "no_description" && !reader.reading ? <NoEvidenceLine /> : null}
         {readerStatus?.enabled === true && file !== null && !readerOff() ? (
           <ReadReceiptButton
             status={readerStatus}
             offer={offerRead}
             onRead={() => {
-              setCardSlip(false);
+              setRefused(null);
               setReadAsked(true);
               void reader.read(file);
             }}
@@ -629,11 +652,12 @@ export function AddExpenseCard(props: AddExpenseProps) {
             placeholder="0.00"
             aria-required="true"
             aria-invalid={invalid("amount") || undefined}
-            aria-describedby={describedBy("amount", "expense_amount")}
+            aria-describedby={describedBy("amount", "expense_amount", missingId("amount"))}
             {...amountInput}
             className={`${FIELD} ${border("amount")} ${suggested("amount")} pl-12 pr-3 text-flask-black`}
           />
         </div>
+        {missingLine("amount")}
         {readerExtras("amount", "expense_amount")}
         {rateMissing && !amount.trim() ? (
           <p role="status" className="mt-1.5 break-words text-sm text-text-secondary">
@@ -681,7 +705,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
             text={supplierText}
             invalid={invalid("supplier")}
             className={suggested("supplier")}
-            describedBy={describedBy("supplier", "expense_contact")}
+            describedBy={describedBy("supplier", "expense_contact", missingId("supplier"))}
             onText={(text) => {
               change("supplier", {
                 supplierText: text,
@@ -714,6 +738,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
               return noSupplierOptions(offer, setNewContact);
             }}
           />
+          {missingLine("supplier")}
           {readerExtras("supplier", "expense_contact")}
         </div>
       ) : (
@@ -777,7 +802,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
           text={accountText}
           invalid={invalid("account")}
           className={suggested("account")}
-          describedBy={describedBy("account", "expense_account_code")}
+          describedBy={describedBy("account", "expense_account_code", missingId("account"))}
           onText={(text) => {
             change("account", {
               accountText: text,
@@ -790,6 +815,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
             return list.length > 0 ? accountOptions(list, pickAccount) : null;
           }}
         />
+        {missingLine("account")}
         {readerExtras("account", "expense_account_code")}
       </div>
 
@@ -826,6 +852,19 @@ export function AddExpenseCard(props: AddExpenseProps) {
           }}
           onBack={() => setDuplicate(null)}
         />
+      ) : null}
+      {refused === "several_documents" ? (
+        <QuestionDialog
+          title={SEVERAL_RECEIPTS.title}
+          image="dont"
+          busy={false}
+          confirmLabel="OK"
+          hideBack
+          onConfirm={() => setRefused(null)}
+          onBack={() => setRefused(null)}
+        >
+          <p>{SEVERAL_RECEIPTS.text}</p>
+        </QuestionDialog>
       ) : null}
     </form>
   );
