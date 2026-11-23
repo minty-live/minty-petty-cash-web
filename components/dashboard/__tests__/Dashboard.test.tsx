@@ -4,7 +4,7 @@
 // submitted" and, right under it, "Report in Progress" - nothing was in progress. The summary
 // names the last submitted report then.
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -122,5 +122,47 @@ describe("the report calendar", () => {
     show(home({}));
 
     expect(await screen.findByText("November 2026")).toBeInTheDocument();
+  });
+});
+
+// 2026-11-23: after "Continue to next day report" the dashboard was on the right day (the one after
+// the last submitted report) and still warned "Earlier reports need finishing before this one".
+describe("the catch-up warning", () => {
+  const WARNING = "Earlier reports need finishing before today's. Want to catch those up first?";
+  const ANY_WARNING = /Earlier reports need finishing/;
+  const behind = {
+    server_today: "2026-11-23",
+    latest: { ...home({}).latest, date: "2026-10-03", closing_balance: 27000 },
+    published: { "2026-10-01": day(27000), "2026-10-02": day(27001), "2026-10-03": day(27002) },
+    start_date: "2026-10-01",
+    today_has_report: false,
+    today_is_latest_report: false,
+  };
+
+  it("is not shown on the day that catches up", async () => {
+    show(home(behind));
+
+    expect(await screen.findByText("Start New Report")).toBeInTheDocument();
+    expect(screen.queryByText(ANY_WARNING)).not.toBeInTheDocument();
+  });
+
+  it("is not shown while that day's draft is open", async () => {
+    show(
+      home({
+        ...behind,
+        draft: { id: "d", current_section: null, completed_sections: [], last_edit_seconds: 60 },
+        draft_date: "2026-10-04",
+      }),
+    );
+
+    expect(await screen.findByText("Continue Report")).toBeInTheDocument();
+    expect(screen.queryByText(ANY_WARNING)).not.toBeInTheDocument();
+  });
+
+  it("is shown, about today's report, when an earlier submitted day is picked", async () => {
+    show(home(behind));
+
+    fireEvent.click(await screen.findByRole("button", { name: "02 Oct 2026, submitted" }));
+    expect(screen.getByText(WARNING)).toBeInTheDocument();
   });
 });

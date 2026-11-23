@@ -114,6 +114,18 @@ export function previousDayUnfinished(home: Home): boolean {
 }
 
 /**
+ * The amber "Earlier reports need finishing before today's" banner: yesterday is unfinished and the
+ * day in hand - the open draft's, else the one picked (none = today) - is not the day after the last
+ * submitted report. On that day the person is already catching up, so it stays quiet (2026-11-23).
+ */
+export function catchUpWarning(home: Home, selected: string | null): boolean {
+  const span = reportSpan(home);
+  if (!span || !previousDayUnfinished(home)) return false;
+  const inHand = home.draft ? home.draft_date : selected;
+  return inHand !== addDays(span.latest, 1);
+}
+
+/**
  * The day the page opens on after skipped days (development's `gateDay`): yesterday is unfinished,
  * so the day after the last submitted report - the only day `startProblem` accepts - is picked,
  * while no draft is open (Continue owns that).

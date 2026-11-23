@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   balanceFor,
   catchUpDay,
+  catchUpWarning,
   CHOOSE_CURRENCY,
   dayState,
   depositToConfirm,
@@ -185,6 +186,41 @@ describe("starting a report", () => {
     expect(NO_CURRENCY).toBe(
       "No currency is selected for this company. Choose one in Settings, under General, to start a report.",
     );
+  });
+});
+
+// 2026-11-23: the amber banner stayed on while the person was already on the day that catches up
+// (the day after the last submitted report). It is about today's report, so it shows only while
+// the day in hand is not that day.
+describe("the catch-up warning", () => {
+  const behind = { published: { "2026-10-01": day(), "2026-10-03": day() } }; // next day: 4th
+  const draft = {
+    id: "d",
+    current_section: "opening",
+    completed_sections: [],
+    last_edit_seconds: 5,
+  };
+
+  it("is off on the next day to do, picked or open as a draft", () => {
+    expect(catchUpWarning(home(behind), "2026-10-04")).toBe(false);
+    expect(catchUpWarning(home({ ...behind, draft, draft_date: "2026-10-04" }), null)).toBe(false);
+    // a submitted day looked at while the draft on the next day is open: already catching up
+    expect(catchUpWarning(home({ ...behind, draft, draft_date: "2026-10-04" }), "2026-10-01")).toBe(
+      false,
+    );
+  });
+
+  it("is on while yesterday is unfinished and another day is in hand", () => {
+    expect(catchUpWarning(home(behind), "2026-10-03")).toBe(true); // a submitted day
+    expect(catchUpWarning(home(behind), null)).toBe(true); // nothing picked: today
+    expect(catchUpWarning(home(behind), TODAY)).toBe(true);
+    // a stale draft dated before the last submitted day
+    expect(catchUpWarning(home({ ...behind, draft, draft_date: "2026-10-02" }), null)).toBe(true);
+  });
+
+  it("is off when yesterday is in, or nothing is submitted", () => {
+    expect(catchUpWarning(home({ published: { "2026-10-13": day() } }), null)).toBe(false);
+    expect(catchUpWarning(home(), null)).toBe(false);
   });
 });
 

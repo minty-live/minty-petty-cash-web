@@ -18,6 +18,7 @@ import { reportHref } from "@/lib/companyPages";
 import {
   balanceFor,
   catchUpDay,
+  catchUpWarning,
   depositToConfirm,
   firstReportDay,
   lastEditText,
@@ -265,7 +266,7 @@ function DashboardBody({
   return (
     <PhoneCard acronym={acronym} overlays={overlays}>
       <div className="mb-6">
-        {previousDayUnfinished(home) ? (
+        {catchUpWarning(home, selected) ? (
           <div className="mb-4">
             <div
               className="mb-10 flex w-full items-start rounded-[8px] border-l-4 border-l-flask-amber-edge bg-flask-amber-bg px-4 py-3"
@@ -292,7 +293,7 @@ function DashboardBody({
               <div>
                 <p className="mb-1 text-sm font-bold text-flask-amber-ink">Warning</p>
                 <p className="text-sm leading-snug text-flask-amber-ink">
-                  Earlier reports need finishing before this one. Want to catch those up first?
+                  Earlier reports need finishing before today&apos;s. Want to catch those up first?
                 </p>
               </div>
             </div>
