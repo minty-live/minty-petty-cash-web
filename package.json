@@ -15,7 +15,7 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
-    "@minty/shared": "github:minty-live/minty-shared-ts#v0.33",
+    "@minty/shared": "github:minty-live/minty-shared-ts#v0.34",
     "material-symbols": "^0.48.1",
     "next": "16.4.6",
     "react": "19.3.1",
