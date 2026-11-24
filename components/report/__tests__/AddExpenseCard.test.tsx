@@ -10,10 +10,16 @@ vi.mock("@/lib/apiClient", async (original) => ({
   ...(await original<typeof import("@/lib/apiClient")>()),
   pettyCashFetch: vi.fn(),
 }));
+// jsdom can't decode a photo: the free photo check is stood in for (the user, 2026-11-24)
+vi.mock("@minty/shared/reader", async (original) => ({
+  ...(await original<typeof import("@minty/shared/reader")>()),
+  photoQuality: vi.fn(),
+}));
 
 import { ToastProvider } from "@/components/flask/Toasts";
 import { AddExpenseCard, type AddExpenseProps } from "@/components/report/AddExpenseCard";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
+import { photoQuality } from "@minty/shared/reader";
 import { resetReaderLatch } from "@/lib/expenseAi";
 
 const fetchMock = vi.mocked(pettyCashFetch);
@@ -140,7 +146,10 @@ beforeAll(() => {
   URL.createObjectURL ??= () => "blob:receipt";
   URL.revokeObjectURL ??= () => undefined;
 });
-beforeEach(() => resetReaderLatch());
+beforeEach(() => {
+  resetReaderLatch();
+  vi.mocked(photoQuality).mockResolvedValue(null); // a sharp photo, unless a test says otherwise
+});
 afterEach(() => resetReaderLatch());
 
 /** The reader switched off (the API without EXPENSE_AI_ENABLED). */
@@ -846,6 +855,65 @@ const SEVERAL = "This file contains more than one receipt. Please upload each re
 const AMOUNT_EMPTY = "The amount is still empty. Add the amount to continue.";
 const SUPPLIER_EMPTY = "The supplier is still empty. Choose a supplier to continue.";
 const ACCOUNT_EMPTY = "The account code is still empty. Choose an account code to continue.";
+
+const BLURRY = "This photo looks blurry. Check that it can be read, or take a clearer one.";
+const BANK =
+  "This looks like a bank payment confirmation, not a receipt. Check that you've attached the receipt or invoice before you save.";
+
+describe("a wrong or poor receipt is warned about, never refused (the user, 2026-11-24)", () => {
+  it("a photo that looks blurry says so the moment it is picked - no read, no AI", async () => {
+    const seen = api();
+    vi.mocked(photoQuality).mockResolvedValueOnce("blurry");
+    show();
+    await attach(png("soft.png"));
+    expect(await screen.findByText(BLURRY)).toHaveAttribute("role", "status");
+    expect(seen.reads).toHaveLength(0);
+    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
+  });
+
+  it("another receipt takes the photo's line away", async () => {
+    api();
+    vi.mocked(photoQuality).mockResolvedValueOnce("blurry").mockResolvedValueOnce(null);
+    show();
+    await attach(png("soft.png"));
+    await screen.findByText(BLURRY);
+    await attach(png("sharp.png"));
+    await waitFor(() => expect(screen.queryByText(BLURRY)).toBeNull());
+  });
+
+  it("a read that finds a bank payment confirmation still fills, and says what it looks like", async () => {
+    api({ suggestions: SUGGESTIONS, reason: null, document_warning: "bank_payment_confirmation" });
+    show();
+    await attachAndRead(png("transfer.png"));
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    expect(screen.getByText(BANK)).toHaveAttribute("role", "status");
+  });
+
+  it("a refused read that looks like a bank confirmation says that, not the general line", async () => {
+    api({
+      suggestions: null,
+      reason: "no_description",
+      document_warning: "bank_payment_confirmation",
+    });
+    show();
+    await attachAndRead(png("transfer.png"));
+    expect(await screen.findByText(BANK)).toBeInTheDocument();
+    expect(screen.queryByText(NO_EVIDENCE)).toBeNull();
+  });
+
+  it("a read with no warning shows none, and another receipt takes a warning away", async () => {
+    api({ suggestions: SUGGESTIONS, reason: null, document_warning: "other" });
+    show();
+    await attachAndRead(png("cat.png"));
+    expect(
+      await screen.findByText(
+        "This doesn't look like a receipt or invoice. Check the file before you save.",
+      ),
+    ).toBeInTheDocument();
+    await attach(png("receipt.png"));
+    expect(screen.queryByText(/doesn't look like a receipt/)).toBeNull();
+  });
+});
 
 describe("a receipt that doesn't say what was paid for", () => {
   it("fills nothing and says why - not the failure line, not the caution; the receipt stays", async () => {

@@ -23,6 +23,7 @@ import {
   ReadingNotice as SharedReadingNotice,
   SuggestedLine as SharedSuggestedLine,
   useDocumentReader,
+  type DocumentWarning,
   type EvidenceRefusal,
   type ReaderStatus,
 } from "@minty/shared/reader";
@@ -63,6 +64,8 @@ export function useReceiptReader(
    * or nothing describes what was paid for. Not a failure: the card says why instead.
    */
   onRefused?: (reason: EvidenceRefusal) => void,
+  /** What the receipt may be instead (the user, 2026-11-24), or null after each read: a warning only. */
+  onWarning?: (warning: DocumentWarning | null) => void,
 ) {
   return useDocumentReader<Suggestions>({
     field: "receipt",
@@ -70,6 +73,7 @@ export function useReceiptReader(
     onSuggestions,
     onStatus,
     onRefused,
+    onWarning,
     post: async (form, signal) => {
       if (day) form.append("transaction_date", day);
       return pettyCashFetch<ExtractAnswer>(EXTRACT_PATH, {

@@ -1042,6 +1042,66 @@ for (const size of [
   });
 }
 
+// The user, 2026-11-24: a wrong or poor receipt is warned about, never refused.
+for (const size of [
+  { width: 360, height: 740 },
+  { width: 768, height: 1024 },
+  { width: 1440, height: 900 },
+]) {
+  test(`a tiny photo is called very small the moment it is picked - no AI (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    let reads = 0;
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) => {
+        reads += 1;
+        return route.fulfill({ json: { suggestions: null, reason: "timeout" } });
+      },
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page); // the 1×1 PNG: the real browser check, nothing stood in for
+    const line = page.getByText(
+      "This photo is very small. Check that it can be read, or attach a larger one.",
+    );
+    await expect(line).toBeVisible();
+    expect(reads).toBe(0);
+    await expectNoHorizontalScroll(page);
+    await line.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-photo-small-${size.width}.png` });
+  });
+
+  test(`a read that finds a bank payment confirmation fills and warns (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await openWith(page, expensesAnswer(), {
+      onExtract: (_req, route) =>
+        route.fulfill({
+          json: {
+            suggestions: SUGGESTIONS,
+            reason: null,
+            document_warning: "bank_payment_confirmation",
+          },
+        }),
+    });
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await attachReceipt(page, "transfer.png");
+    await readButton(page).click();
+    await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
+    const line = page.getByText(
+      "This looks like a bank payment confirmation, not a receipt. Check that you've attached the receipt or invoice before you save.",
+    );
+    await expect(line).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add", exact: true })).toBeEnabled();
+    await expectNoHorizontalScroll(page);
+    await line.scrollIntoViewIfNeeded();
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-bank-warning-${size.width}.png` });
+  });
+}
+
 // The owner's launch decisions, 2026-11-23 (IRD "A Guide to Keeping Business Records").
 for (const size of [
   { width: 360, height: 740 },

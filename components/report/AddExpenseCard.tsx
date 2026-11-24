@@ -70,12 +70,18 @@ import { descriptionProblem } from "@/lib/report";
 import {
   AiCaution,
   convertedText,
+  documentWarningText,
   exchangeFailedOf,
   exchangeFields,
   exchangeKept,
   exchangeOf,
+  photoQuality,
+  photoQualityText,
+  ReadFailedLine,
+  type DocumentWarning,
   type EvidenceRefusal,
   type Exchange,
+  type PhotoFinding,
   type ReaderStatus,
 } from "@minty/shared/reader";
 
@@ -246,6 +252,12 @@ export function AddExpenseCard(props: AddExpenseProps) {
   // a receipt that isn't one record of a payment (owner, 2026-11-23): nothing filled, and the card
   // says why - a line under the drop zone, or an OK-only question for several receipts
   const [refused, setRefused] = useState<EvidenceRefusal | null>(null);
+  // a wrong or poor receipt (the user, 2026-11-24) - warnings only, Add is never stopped: what the
+  // read says it may be instead, and the free photo check (no AI) on the picked photo
+  const [documentWarning, setDocumentWarning] = useState<DocumentWarning | null>(null);
+  const [photoCheck, setPhotoCheck] = useState<{ file: File; finding: PhotoFinding | null } | null>(
+    null,
+  );
   // the required fields shown red: after a refused Add, or (owner, 2026-11-23) left empty by a read
   const [errors, setErrors] = useState<Set<RequiredField>>(new Set());
   const reader = useReceiptReader(
@@ -283,6 +295,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
     onReaderStatus,
     day,
     setRefused,
+    setDocumentWarning,
   );
   // the receipt and an object URL of it, made when it is picked and let go when it is replaced
   const [picked, setPicked] = useState<Picked | null>(() =>
@@ -291,6 +304,18 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const pickedRef = useRef<Picked | null>(picked);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
+  // the free photo check on every receipt picked or restored, kept with the file it is about
+  useEffect(() => {
+    if (!file) return;
+    let current = true;
+    void photoQuality(file).then((finding) => {
+      if (current) setPhotoCheck({ file, finding: finding ?? null });
+    });
+    return () => {
+      current = false;
+    };
+  }, [file]);
+  const photoFinding = photoCheck && photoCheck.file === file ? photoCheck.finding : null;
   // "Read receipt" was pressed for this receipt: the button goes, and comes back after a failed read
   const [readAsked, setReadAsked] = useState(false);
   // (and never once a `disabled` answer has switched the reader off for the session)
@@ -613,6 +638,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setExchange(null);
           setRateMissing(null);
           setRefused(null);
+          setDocumentWarning(null);
           // read only on "Read receipt" (owner, 2026-11-18)
           reader.cancel();
           setReadAsked(false);
@@ -621,13 +647,20 @@ export function AddExpenseCard(props: AddExpenseProps) {
       >
         {reader.reading ? <ReadingNotice /> : null}
         {reader.failed && !reader.reading ? <ReadFailed /> : null}
-        {refused === "no_description" && !reader.reading ? <NoEvidenceLine /> : null}
+        {photoFinding ? <ReadFailedLine text={photoQualityText(photoFinding)} /> : null}
+        {documentWarning && !reader.reading ? (
+          // the more specific word on a refused read too: "a bank payment confirmation"
+          <ReadFailedLine text={documentWarningText(documentWarning, "receipt")} />
+        ) : refused === "no_description" && !reader.reading ? (
+          <NoEvidenceLine />
+        ) : null}
         {readerStatus?.enabled === true && file !== null && !readerOff() ? (
           <ReadReceiptButton
             status={readerStatus}
             offer={offerRead}
             onRead={() => {
               setRefused(null);
+              setDocumentWarning(null);
               setReadAsked(true);
               void reader.read(file);
             }}
