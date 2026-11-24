@@ -406,7 +406,7 @@ describe("a receipt in another currency", () => {
   it("adds the original amount and the rate after the description (owner, 2026-11-23)", () => {
     const next = withSuggestions(entryState(), converted(), CTX);
     expect(next.values.amount).toBe("1,345.60");
-    expect(next.values.description).toBe("Courier delivery (PHP 10,000.00 @0.13456)");
+    expect(next.values.description).toBe("Courier delivery (PHP 10,000.00 @ 1 HKD = 7.43 PHP)");
     expect(next.marks.description).toBe("high");
   });
 
@@ -416,7 +416,7 @@ describe("a receipt in another currency", () => {
       converted({ description: read("", "low", false) }),
       CTX,
     );
-    expect(next.values.description).toBe("(PHP 10,000.00 @0.13456)");
+    expect(next.values.description).toBe("(PHP 10,000.00 @ 1 HKD = 7.43 PHP)");
     expect(next.marks.description).toBe("medium");
   });
 

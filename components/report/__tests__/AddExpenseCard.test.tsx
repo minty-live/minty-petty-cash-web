@@ -781,9 +781,9 @@ describe("a receipt in another currency", () => {
     await waitFor(() => expect(amount()).toHaveValue("96.82"));
     expect(calls.reads[0].get("transaction_date")).toBe("2026-10-13");
     // owner, 2026-11-23: the original amount and the rate follow the description
-    expect(description()).toHaveValue("Copy paper (USD 12.34 @7.846)");
+    expect(description()).toHaveValue("Copy paper (USD 12.34 @ 1 USD = 7.85 HKD)");
     expect(amount()).toHaveAccessibleDescription(
-      "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate, the last business day before 15 Nov 2026).",
+      "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.85 HKD (13 Nov 2026 rate, the last business day before 15 Nov 2026).",
     );
     // owner, 2026-11-23: the caution stays one sentence, no exchange-rate sentence
     expect(document.getElementById("expense_ai_caution")?.textContent).toBe(CAUTION);

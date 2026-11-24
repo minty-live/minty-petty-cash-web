@@ -1177,7 +1177,7 @@ for (const size of [
     await expect(amount).toHaveValue("96.82");
     expect(read).toContain('name="transaction_date"');
     await expect(amount).toHaveAccessibleDescription(
-      "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.846 HKD (13 Nov 2026 rate).",
+      "Amount suggested. Converted from USD\u00a012.34 at 1 USD = 7.85 HKD (13 Nov 2026 rate).",
     );
     const caution = page.getByText(AI_CAUTION, { exact: true });
     await expect(caution).toBeVisible();
