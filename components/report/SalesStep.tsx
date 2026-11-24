@@ -11,7 +11,7 @@ import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { LoadingOverlay, ReportBadge } from "@/components/report/ReportChrome";
-import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
+import { reportVersion, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
@@ -151,13 +151,6 @@ function SalesForm({
       setValues({ ...initial.values, ...kept.values });
       setCash(kept.cash);
     },
-    describe: (kept) => [
-      ...[...electronic, ...delivery].map((m) => ({
-        label: flaskLabel(m.name),
-        value: typedMoney(kept.values[m.value_name], code),
-      })),
-      ...(parts.cash ? [{ label: "Cash Sales", value: typedMoney(kept.cash, code) }] : []),
-    ],
   });
 
   // "Leave without saving?" on every way out while something is unsaved (owner, 2026-11-17)
@@ -253,7 +246,7 @@ function SalesForm({
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Sales Entry</h2>
       </div>
-      {draft.notice}
+      {draft.restorer}
 
       <form
         onSubmit={(e) => {

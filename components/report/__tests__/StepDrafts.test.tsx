@@ -1,8 +1,8 @@
 // Auto-saved drafts on the report wizard (owner's decisions doc L1; the user's choices, 2026-11-20):
-// what a step holds is kept in this browser 2 s after the last change, offered back on return
-// ("You have unsaved changes from ..." - Restore / Discard), cleared by the step's own successful
-// save and by the leave guard's Discard changes, KEPT through an R2 409, and shown read-only when
-// the report's edit_version has moved since (stale).
+// what a step holds is kept in this browser 2 s after the last change, put back as soon as the step
+// opens again with nothing asked or drawn (the user, 2026-11-24), cleared by the step's own
+// successful save and by the leave guard's Discard changes, KEPT through an R2 409, and dropped
+// silently when the report's edit_version has moved since (stale).
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -115,7 +115,13 @@ const sales = (over: Partial<SalesPage> = {}): SalesPage => ({
 
 let user: ReturnType<typeof userEvent.setup>;
 const wait2s = () => act(() => vi.advanceTimersByTime(2000));
-const noticeText = /You have unsaved changes from \d\d:\d\d\./;
+/** Nothing about a draft is drawn: no notice, no Restore / Discard (the user, 2026-11-24). */
+function expectNothingDrawn() {
+  expect(document.querySelector("[data-draft-notice]")).toBeNull();
+  expect(screen.queryByText(/unsaved changes/)).toBeNull();
+  expect(screen.queryByRole("button", { name: "Restore" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Discard" })).toBeNull();
+}
 
 function renderStep(step: ReactNode) {
   return render(<ToastProvider>{step}</ToastProvider>);
@@ -158,7 +164,7 @@ describe("Sales", () => {
     });
   });
 
-  it("offers it on return; Restore puts the values back", async () => {
+  it("puts the values back as soon as the step opens again, asking nothing", async () => {
     api("/reports/sales", [sales()]);
     const first = renderStep(<SalesStep day={DAY} />);
     await typeCash("50");
@@ -166,24 +172,9 @@ describe("Sales", () => {
     first.unmount();
 
     renderStep(<SalesStep day={DAY} />);
-    expect(await screen.findByText(noticeText)).toBeInTheDocument();
-    expect(screen.getByRole("textbox", { name: "Cash Sales" })).toHaveValue("");
-    await user.click(screen.getByRole("button", { name: "Restore" }));
-    expect(screen.getByRole("textbox", { name: "Cash Sales" })).toHaveValue("50");
-    expect(screen.queryByText(noticeText)).not.toBeInTheDocument();
-  });
-
-  it("Discard throws the draft away", async () => {
-    api("/reports/sales", [sales()]);
-    const first = renderStep(<SalesStep day={DAY} />);
-    await typeCash("50");
-    await wait2s();
-    first.unmount();
-
-    renderStep(<SalesStep day={DAY} />);
-    await user.click(await screen.findByRole("button", { name: "Discard" }));
-    expect(screen.queryByText(noticeText)).not.toBeInTheDocument();
-    expect(kept("pc.sales")).toBeNull();
+    const cash = await screen.findByRole("textbox", { name: "Cash Sales" });
+    await waitFor(() => expect(cash).toHaveValue("50"));
+    expectNothingDrawn();
   });
 
   it("a successful save clears it before moving on", async () => {
@@ -201,7 +192,7 @@ describe("Sales", () => {
     expect(kept("pc.sales")).toBeNull();
   });
 
-  it("an R2 409 keeps it; after a reload it comes back stale, shown but never put back", async () => {
+  it("an R2 409 keeps it; after a reload it is stale and dropped silently", async () => {
     const saved = sales({ edit_version: 4, cash_sales: 20 });
     api(
       "/reports/sales",
@@ -217,16 +208,11 @@ describe("Sales", () => {
     first.unmount();
 
     renderStep(<SalesStep day={DAY} />);
-    const stale = await screen.findByText(/This was saved again after your unsaved changes/);
-    const box = stale.closest("[data-draft-notice]") as HTMLElement;
-    expect(box).toHaveAttribute("data-draft-notice", "stale");
-    expect(within(box).queryByRole("button", { name: "Restore" })).toBeNull();
-    await user.click(within(box).getByRole("button", { name: "Show what I typed" }));
-    expect(within(box).getByText("Cash Sales").nextElementSibling?.textContent).toBe(
-      "HKD\u00a050.00",
-    );
+    await screen.findByRole("textbox", { name: "Cash Sales" });
+    await waitFor(() => expect(kept("pc.sales")).toBeNull());
     // their saved value stays in the field
     expect(screen.getByRole("textbox", { name: "Cash Sales" })).toHaveValue("20.00");
+    expectNothingDrawn();
   });
 
   it("the leave guard's Discard changes clears it", async () => {
@@ -269,11 +255,12 @@ describe("Opening and Bank Deposit", () => {
     });
     first.unmount();
 
-    // the same page again: Restore
+    // the same page again: put back at once
     const again = renderStep(<OpeningStep day={DAY} />);
-    await user.click(await screen.findByRole("button", { name: "Restore" }));
-    expect(screen.getByLabelText("Addition to Cash Drawer")).toHaveValue("30.00");
+    const addition = await screen.findByLabelText("Addition to Cash Drawer");
+    await waitFor(() => expect(addition).toHaveValue("30.00"));
     expect(screen.getByRole("radio", { name: "Company Bank" })).toBeChecked();
+    expectNothingDrawn();
     again.unmount();
 
     // someone started the day since
@@ -281,8 +268,11 @@ describe("Opening and Bank Deposit", () => {
       opening({ draft: { ...DRAFT, current_section: "opening" }, edit_version: 1 }),
     ]);
     renderStep(<OpeningStep day={DAY} />);
-    const stale = await screen.findByText(/This was saved again/);
-    expect(stale.closest("[data-draft-notice]")).toHaveAttribute("data-draft-notice", "stale");
+    const stale = await screen.findByLabelText("Addition to Cash Drawer");
+    await waitFor(() => expect(kept("pc.opening")).toBeNull());
+    expect(stale).not.toHaveValue("30.00");
+    expect(screen.getByRole("radio", { name: "Company Bank" })).not.toBeChecked();
+    expectNothingDrawn();
   });
 
   it("Bank Deposit: kept, restored, and cleared by its save", async () => {
@@ -307,8 +297,9 @@ describe("Opening and Bank Deposit", () => {
     first.unmount();
 
     renderStep(<DepositStep day={DAY} />);
-    await user.click(await screen.findByRole("button", { name: "Restore" }));
-    expect(screen.getByLabelText("Deposit Amount")).toHaveValue("60");
+    const amount = await screen.findByLabelText("Deposit Amount");
+    await waitFor(() => expect(amount).toHaveValue("60"));
+    expectNothingDrawn();
     await user.click(screen.getByRole("button", { name: /Save & Next/ }));
     await waitFor(() => expect(router.push).toHaveBeenCalled());
     expect(kept("pc.deposit")).toBeNull();
@@ -336,7 +327,7 @@ describe("Cash Count", () => {
     discrepancy: { amount: 0, kind: "none", reason: "" },
   };
 
-  it("keeps the open calculator's typed counts; Restore reopens it with them", async () => {
+  it("keeps the open calculator's typed counts; coming back reopens it with them", async () => {
     api("/reports/cash-count", [page]);
     const first = renderStep(<CashCountStep day={DAY} />);
     await user.click(await screen.findByRole("button", { name: "Calculator" }));
@@ -350,12 +341,12 @@ describe("Cash Count", () => {
     first.unmount();
 
     renderStep(<CashCountStep day={DAY} />);
-    await user.click(await screen.findByRole("button", { name: "Restore" }));
     const reopened = await screen.findByRole("dialog", { name: "Use Calculator" });
     expect(within(reopened).getAllByRole("textbox")[1]).toHaveValue("3");
+    expectNothingDrawn();
   });
 
-  it("keeps a typed safebox and reason; a moved edit_version reads stale", async () => {
+  it("keeps a typed safebox and reason; a moved edit_version drops it silently", async () => {
     api("/reports/cash-count", [page]);
     const first = renderStep(<CashCountStep day={DAY} />);
     await user.type(await screen.findByRole("textbox", { name: "Safebox Cash Balance" }), "20");
@@ -368,14 +359,11 @@ describe("Cash Count", () => {
 
     api("/reports/cash-count", [{ ...page, edit_version: 10 }]);
     renderStep(<CashCountStep day={DAY} />);
-    const box = (await screen.findByText(/This was saved again/)).closest(
-      "[data-draft-notice]",
-    ) as HTMLElement;
-    await user.click(within(box).getByRole("button", { name: "Show what I typed" }));
-    expect(within(box).getByText("Safebox Cash Balance").nextElementSibling?.textContent).toBe(
-      "HKD\u00a020.00",
-    );
-    expect(within(box).getByText("Short by a note")).toBeInTheDocument();
+    const safe = await screen.findByRole("textbox", { name: "Safebox Cash Balance" });
+    await waitFor(() => expect(kept("pc.cash-count")).toBeNull());
+    expect(safe).not.toHaveValue("20.00");
+    expect(screen.queryByDisplayValue("Short by a note")).toBeNull();
+    expectNothingDrawn();
   });
 });
 
@@ -439,7 +427,7 @@ describe("Expenses", () => {
     await user.click(screen.getByRole("option", { name: /General Expenses/ }));
   }
 
-  it("keeps a new line with its receipt; Restore opens the card with both", async () => {
+  it("keeps a new line with its receipt; coming back opens the card with both", async () => {
     expensesApi([expenses()]);
     const first = renderStep(<ExpensesStep day={DAY} />);
     await fillNewLine();
@@ -453,10 +441,8 @@ describe("Expenses", () => {
     first.unmount();
 
     renderStep(<ExpensesStep day={DAY} />);
-    expect(await screen.findByText(noticeText)).toBeInTheDocument();
-    expect(screen.queryByRole("textbox", { name: /Expense Amount/ })).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Restore" }));
-    expect(amount()).toHaveValue("12.00");
+    expect(await screen.findByRole("textbox", { name: /Expense Amount/ })).toHaveValue("12.00");
+    expectNothingDrawn();
     expect(screen.getByRole("combobox", { name: /Suppliers/ })).toHaveValue("Wellcome");
     // the receipt came back from the draft's file store
     expect(screen.getByRole("img", { name: "Uploaded receipt" })).toBeInTheDocument();
@@ -487,20 +473,20 @@ describe("Expenses", () => {
     expect(kept("pc.expense", "l1")).toMatchObject({ value: { values: { amount: "15" } } });
     first.unmount();
 
-    // unchanged: offered on arrival, and Restore opens Edit Expense with it
+    // unchanged: Edit Expense opens with it on arrival
     const again = renderStep(<ExpensesStep day={DAY} />);
-    await user.click(await screen.findByRole("button", { name: "Restore" }));
-    expect(screen.getByRole("heading", { name: "Edit Expense" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Edit Expense" })).toBeInTheDocument();
     expect(amount()).toHaveValue("15");
+    expectNothingDrawn();
     again.unmount();
 
-    // changed by someone since: shown, never put back
+    // changed by someone since: dropped silently, never put back
     expensesApi([expenses({ lines: [{ ...LINE, amount: 13 }], total: 13 })]);
     renderStep(<ExpensesStep day={DAY} />);
-    const box = (await screen.findByText(/This was saved again/)).closest(
-      "[data-draft-notice]",
-    ) as HTMLElement;
-    expect(within(box).queryByRole("button", { name: "Restore" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Edit expense" })).toBeInTheDocument();
+    await waitFor(() => expect(kept("pc.expense", "l1")).toBeNull());
+    expect(screen.queryByRole("heading", { name: "Edit Expense" })).toBeNull();
+    expectNothingDrawn();
   });
 
   it("a successful edit clears it", async () => {

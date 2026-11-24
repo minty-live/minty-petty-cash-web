@@ -11,7 +11,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
-import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
+import { reportVersion, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FixNegativeBalanceModal,
@@ -150,13 +150,6 @@ function OpeningForm({
       setWithdrawal(kept.withdrawal === "company" ? "company" : "personal");
       setWithdrawalDirty(kept.withdrawalDirty);
     },
-    describe: (kept) => [
-      { label: "Addition to Cash Drawer", value: typedMoney(kept.addition, code) },
-      {
-        label: "Withdrawal from",
-        value: kept.withdrawal === "company" ? "Company Bank" : "Personal",
-      },
-    ],
   });
 
   async function save(action: "next" | "exit") {
@@ -262,7 +255,7 @@ function OpeningForm({
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Opening</h2>
       </div>
-      {draft.notice}
+      {draft.restorer}
 
       <form
         onSubmit={(e) => {

@@ -10,7 +10,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
-import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
+import { reportVersion, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
@@ -149,7 +149,6 @@ function DepositForm({
       setAmount(kept.amount);
       setRefused(null);
     },
-    describe: (kept) => [{ label: "Deposit Amount", value: typedMoney(kept.amount, code) }],
   });
 
   function go(step: WizardStep) {
@@ -264,7 +263,7 @@ function DepositForm({
       <div className="mb-6 text-left">
         <h2 className="text-lg font-bold text-flask-gray-700 sm:text-xl">Deposit to Bank</h2>
       </div>
-      {draft.notice}
+      {draft.restorer}
 
       <form
         noValidate

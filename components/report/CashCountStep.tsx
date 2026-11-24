@@ -10,7 +10,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
-import { reportVersion, typedMoney, useStepDraft } from "@/components/report/StepDraft";
+import { reportVersion, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import {
   FieldMessage,
@@ -252,17 +252,6 @@ function CashCountForm({
         setCalculator(true);
       }
     },
-    describe: (kept) => [
-      {
-        label: "Cash Box Balance",
-        value: formatMoney(
-          tillTotal(page.denominations, { ...initial.counts, ...kept.counts }),
-          code,
-        ),
-      },
-      { label: "Safebox Cash Balance", value: typedMoney(kept.safe, code) },
-      { label: "Discrepancy Details", value: kept.reason },
-    ],
   });
 
   function go(step: WizardStep) {
@@ -430,7 +419,7 @@ function CashCountForm({
           </span>
         </div>
       </div>
-      {draft.notice ? <div className="mt-4">{draft.notice}</div> : null}
+      {draft.restorer}
 
       <form
         noValidate

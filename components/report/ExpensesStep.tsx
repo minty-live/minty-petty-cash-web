@@ -9,7 +9,7 @@ import { PhoneCard } from "@/components/flask/PhoneCard";
 import { Stepper } from "@/components/flask/Stepper";
 import { useToast } from "@/components/flask/Toasts";
 import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
-import { typedMoney, useStepDraft } from "@/components/report/StepDraft";
+import { useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { AddExpenseCard, type AddExpenseHandle } from "@/components/report/AddExpenseCard";
@@ -55,7 +55,7 @@ type ExpenseDraft = { values: EntryValues };
 /**
  * The record a card's draft is kept under: `new:<day>` for Add New Expense, the line's id for Edit
  * Expense. On arrival, the new line's draft if there is one, else the first saved line with one, so
- * the notice can offer it before any card is open.
+ * its card opens with it put back before any card has been opened.
  */
 function firstDraftRecord(day: string, lines: ExpenseLine[]): string {
   const fresh = `new:${day}`;
@@ -205,12 +205,6 @@ function ExpensesForm({
       setEditing(record === newRecord ? null : (draftLine ?? null));
       setCardStart((at) => ({ n: at.n + 1, start }));
     },
-    describe: (kept) => [
-      { label: "Expense Amount", value: typedMoney(kept.values.amount, code) },
-      { label: "Description", value: kept.values.description },
-      { label: "Suppliers", value: kept.values.supplierText },
-      { label: "Account Code", value: kept.values.accountText },
-    ],
   });
 
   /** Open Add New Expense or Edit Expense, fresh. */
@@ -413,7 +407,7 @@ function ExpensesForm({
           </div>
         </div>
 
-        {draft.notice}
+        {draft.restorer}
         {adding ? (
           <AddExpenseCard
             ref={card}
