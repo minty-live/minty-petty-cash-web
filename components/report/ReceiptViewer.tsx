@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 
 import { pettyCashBlob } from "@/lib/apiClient";
 import type { ExpenseLine } from "@/lib/expenses";
+import { browserDrawsHeic, isHeic } from "@minty/shared/heic";
 
 export type ShownReceipt = { url: string; kind: "image" | "pdf" | "other"; name: string };
 
@@ -43,7 +44,12 @@ export function ReceiptViewer({
   let body;
   if (receipt.kind === "image") {
     body = broken ? (
-      <p className={MESSAGE}>This image can&apos;t be previewed here.</p>
+      <p className={MESSAGE}>
+        {isHeic("", receipt.name)
+          ? // a picked iPhone HEIC on a browser that can't draw it: saved, the API makes it a JPEG
+            "This photo can be viewed once it's saved."
+          : "This image can't be previewed here."}
+      </p>
     ) : (
       // eslint-disable-next-line @next/next/no-img-element -- an object URL of the receipt's bytes
       <img
@@ -114,7 +120,9 @@ export type ReceiptUrls = Record<string, { url?: string; failed?: boolean }>;
 
 /**
  * A line's receipts as object URLs, read with the bearer from
- * `GET /expense-lines/<id>/receipts/<receipt id>` while `line` is shown, and let go after.
+ * `GET /expense-lines/<id>/receipts/<receipt id>` while `line` is shown, and let go after. An
+ * iPhone HEIC is shown as it is where the browser draws it (Safari 17+); elsewhere the API is
+ * asked for `?as=jpeg`, a JPEG made on the fly and never stored (the user, 2026-11-24).
  */
 export function useReceiptUrls(line: ExpenseLine | null): ReceiptUrls {
   const [urls, setUrls] = useState<ReceiptUrls>({});
@@ -123,11 +131,14 @@ export function useReceiptUrls(line: ExpenseLine | null): ReceiptUrls {
     let live = true;
     const made: string[] = [];
     for (const receipt of line.receipts) {
-      pettyCashBlob(
-        `/expense-lines/${encodeURIComponent(line.id)}/receipts/${encodeURIComponent(receipt.id)}`,
-      )
-        .then((blob) => {
-          const url = URL.createObjectURL(blob);
+      const path = `/expense-lines/${encodeURIComponent(line.id)}/receipts/${encodeURIComponent(receipt.id)}`;
+      pettyCashBlob(path)
+        .then(async (blob) => {
+          let url = URL.createObjectURL(blob);
+          if (isHeic(blob.type, receipt.name) && !(await browserDrawsHeic(url))) {
+            URL.revokeObjectURL(url);
+            url = URL.createObjectURL(await pettyCashBlob(`${path}?as=jpeg`));
+          }
           made.push(url);
           if (live) setUrls((all) => ({ ...all, [receipt.id]: { url } }));
           else URL.revokeObjectURL(url);

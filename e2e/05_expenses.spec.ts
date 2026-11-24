@@ -2,6 +2,8 @@
 // Flask's look exactly), against a STUBBED Petty Cash API. Needs only `npm run dev`. Flask's pages
 // (Submitted onwards) are caught, so nothing leaves the app.
 
+import { readFileSync } from "node:fs";
+
 import { expect, test, type Page, type Request, type Route } from "@playwright/test";
 
 import { companyRef } from "./companyRef";
@@ -289,7 +291,7 @@ test("Add checks the required fields, then sends the line with its receipt", asy
   await expect(page.getByRole("heading", { name: "Add New Expense" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add New Expense" })).toHaveCount(0);
   await expect(page.getByText("Click to upload or drag and drop")).toBeVisible();
-  await expect(page.getByText("PDF, JPEG, PNG (Max 10MB)")).toBeVisible();
+  await expect(page.getByText("PDF, JPEG, PNG, HEIC (Max 10MB)")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Description" })).toHaveAttribute(
     "placeholder",
     "Description (Optional)",
@@ -352,7 +354,7 @@ test("a receipt that is not a PDF, JPEG or PNG is refused in Flask's words", asy
   await page
     .getByTestId("expense_files")
     .setInputFiles({ name: "cat.gif", mimeType: "image/gif", buffer: Buffer.from("GIF89a") });
-  await expect(toast(page, "I can take PDF, JPEG, or PNG files.")).toBeVisible();
+  await expect(toast(page, "I can take PDF, JPEG, PNG, or HEIC files.")).toBeVisible();
   await expect(page.getByText("Click to upload or drag and drop")).toBeVisible();
 
   await page.getByTestId("expense_files").setInputFiles({
@@ -1429,4 +1431,53 @@ test("Read receipt shows the company's AI allowance left, and once it is used up
     path: `test-results/ai-reads-used-up-${page.viewportSize()?.width}.png`,
     fullPage: true,
   });
+});
+
+// An iPhone HEIC (the user, 2026-11-24): stored as it is. Chromium can't draw HEIC, so a picked
+// one shows its name, and a saved one is fetched again as a JPEG the API makes on the fly.
+const HEIC = readFileSync("e2e/fixtures/tiny.heic");
+const JPEG = readFileSync("e2e/fixtures/tiny.jpg");
+
+test("an iPhone HEIC receipt is taken as it is and shown as a JPEG where the browser can't draw it", async ({
+  page,
+}) => {
+  const asked: string[] = [];
+  const heicLine = {
+    ...LINE,
+    receipts: [{ id: "r1", name: "IMG_1.HEIC", mime_type: "image/heic" }],
+  };
+  await stub(page, expensesAnswer({ lines: [heicLine, BARE_LINE] }));
+  await page.route(`${API}/expense-lines/*/receipts/**`, (route) => {
+    const url = route.request().url();
+    asked.push(url);
+    return url.includes("as=jpeg")
+      ? route.fulfill({ body: JPEG, contentType: "image/jpeg" })
+      : route.fulfill({ body: HEIC, contentType: "image/heic" });
+  });
+  await enter(page);
+
+  // saved: the HEIC first, then - Chromium can't draw it - the JPEG made on the fly
+  await page.getByRole("button", { name: "General Expenses, HKD 1,200.50" }).click();
+  const dialog = page.getByRole("dialog", { name: "Expense Details" });
+  const thumb = dialog.getByRole("img", { name: "IMG_1.HEIC" });
+  await expect.poll(() => thumb.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
+  // (React's development mode runs the effect twice, so each may be asked twice)
+  expect([...new Set(asked.map((url) => new URL(url).search))]).toEqual(["", "?as=jpeg"]);
+  await expectNoHorizontalScroll(page);
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  // picked: the phone's chooser is offered images and PDF (its camera too), JPEG first
+  await page.getByRole("button", { name: "Add New Expense" }).click();
+  const picker = page.getByTestId("expense_files");
+  await expect(picker).toHaveAttribute(
+    "accept",
+    /^image\/jpeg,image\/png,application\/pdf,image\/heic/,
+  );
+  await expect(picker).not.toHaveAttribute("capture");
+  await expect(page.getByText("PDF, JPEG, PNG, HEIC (Max 10MB)")).toBeVisible();
+  await picker.setInputFiles({ name: "IMG_2.HEIC", mimeType: "image/heic", buffer: HEIC });
+  await expect(page.getByText('"IMG_2.HEIC" Uploaded')).toBeVisible();
+  await expect(page.getByText("This photo can be viewed once it's saved.")).toBeVisible();
+  await expect(toast(page, /I can take/)).toHaveCount(0);
+  await expectNoHorizontalScroll(page);
 });

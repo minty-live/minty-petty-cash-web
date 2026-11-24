@@ -156,7 +156,7 @@ describe("editing a submitted report's details (Flask's Edit Details)", () => {
     const file = (type: string, size = 10) => new File([new Uint8Array(size)], "r", { type });
     expect(editReceiptProblem(file("image/png"))).toBeNull();
     expect(editReceiptProblem(file("application/pdf", 10 * 1024 * 1024))).toBeNull();
-    expect(editReceiptProblem(file("image/gif"))).toBe("I can take PDF, JPEG, or PNG files.");
+    expect(editReceiptProblem(file("image/gif"))).toBe("I can take PDF, JPEG, PNG, or HEIC files.");
     expect(editReceiptProblem(file("image/jpeg", 10 * 1024 * 1024 + 1))).toBe(
       "Files need to be under 10MB.",
     );

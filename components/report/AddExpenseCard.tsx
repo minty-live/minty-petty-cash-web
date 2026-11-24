@@ -56,6 +56,7 @@ import {
   lineEdits,
   missingFields,
   newContactProblem,
+  RECEIPT_ACCEPT,
   receiptKind,
   receiptProblem,
   searchAccounts,
@@ -1164,6 +1165,8 @@ function ReceiptDrop({
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [viewing, setViewing] = useState<ShownReceipt | null>(null);
+  /** The picked photo's URL when this browser can't draw it (an iPhone HEIC outside Safari). */
+  const [unshown, setUnshown] = useState<string | null>(null);
   const file = picked?.file ?? null;
   const url = picked?.url ?? null;
   const kind = file ? receiptKind(file.type, file.name) : null;
@@ -1184,7 +1187,7 @@ function ReceiptDrop({
 
   let look: string;
   if (dragging) look = "border-2 border-dashed border-flask-blue-500 bg-flask-blue-50 p-6";
-  else if (file && kind === "image") look = "border-0 bg-transparent p-0";
+  else if (file && kind === "image" && unshown !== url) look = "border-0 bg-transparent p-0";
   else if (file || kept)
     look = "border-2 border-dashed border-flask-upload-ok bg-flask-upload-ok-bg p-6";
   else
@@ -1260,12 +1263,14 @@ function ReceiptDrop({
           </svg>
         </button>
 
-        {file && kind === "image" && url && !dragging ? (
+        {file && kind === "image" && url && !dragging && unshown !== url ? (
           <div className="m-0 p-0 leading-[0]">
             {/* eslint-disable-next-line @next/next/no-img-element -- an object URL of the picked file */}
             <img
               src={url}
               alt="Uploaded receipt"
+              // a photo this browser can't draw (an iPhone HEIC outside Safari): its name instead
+              onError={() => setUnshown(url)}
               className="mx-auto h-48 w-64 max-w-full object-contain"
             />
             <span id="receipt_hint" className="sr-only">
@@ -1297,8 +1302,14 @@ function ReceiptDrop({
                 <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
                   &quot;{uploadName(file.name)}&quot; Uploaded
                 </p>
-                <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-                  Click to change files
+                <p
+                  id="receipt_hint"
+                  // clear of the corner preview button when the sentence wraps on a phone
+                  className={`mt-1 text-xs text-flask-gray-500 ${unshown === url ? "px-10" : ""}`}
+                >
+                  {unshown === url
+                    ? "This photo can be viewed once it's saved."
+                    : "Click to change files"}
                 </p>
               </>
             ) : kept && !dragging ? (
@@ -1316,7 +1327,7 @@ function ReceiptDrop({
                   Click to upload or drag and drop
                 </p>
                 <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-                  PDF, JPEG, PNG (Max 10MB)
+                  PDF, JPEG, PNG, HEIC (Max 10MB)
                 </p>
               </>
             )}
@@ -1326,7 +1337,7 @@ function ReceiptDrop({
           ref={input}
           type="file"
           className="hidden"
-          accept=".pdf,.jpg,.jpeg,.png"
+          accept={RECEIPT_ACCEPT}
           data-testid="expense_files"
           onClick={(e) => e.stopPropagation()}
           onChange={(e) => {

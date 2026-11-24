@@ -7,6 +7,7 @@ import {
   lineEdits,
   missingFields,
   newContactProblem,
+  RECEIPT_ACCEPT,
   receiptKind,
   receiptProblem,
   searchAccounts,
@@ -78,12 +79,25 @@ describe("receiptProblem", () => {
     expect(receiptProblem([file("a.pdf", "application/pdf")], "picked")).toBeNull();
     expect(receiptProblem([file("a.jpg", "image/jpeg", 10 * 1024 * 1024)], "dropped")).toBeNull();
   });
+  it("takes an iPhone HEIC, by its type or, when the type says nothing, its name (2026-11-24)", () => {
+    expect(receiptProblem([file("IMG_1.HEIC", "image/heic")], "picked")).toBeNull();
+    expect(receiptProblem([file("IMG_1.heif", "image/heif")], "dropped")).toBeNull();
+    expect(receiptProblem([file("IMG_1.HEIC", "")], "picked")).toBeNull();
+    expect(receiptProblem([file("IMG_1.HEIC", "application/octet-stream")], "picked")).toBeNull();
+  });
+  it("judges a file with no type by its name (Windows and some Android pickers give none)", () => {
+    expect(receiptProblem([file("slip.jpg", "")], "picked")).toBeNull();
+    expect(receiptProblem([file("slip.PDF", "")], "picked")).toBeNull();
+    expect(receiptProblem([file("slip.gif", "")], "picked")).toBe(
+      "I can take PDF, JPEG, PNG, or HEIC files.",
+    );
+  });
   it("refuses in Flask's words, naming a dropped file", () => {
     expect(receiptProblem([file("a.gif", "image/gif")], "picked")).toBe(
-      "I can take PDF, JPEG, or PNG files.",
+      "I can take PDF, JPEG, PNG, or HEIC files.",
     );
     expect(receiptProblem([file("a.gif", "image/gif")], "dropped")).toBe(
-      "I can take PDF, JPEG, or PNG files: a.gif",
+      "I can take PDF, JPEG, PNG, or HEIC files: a.gif",
     );
     expect(receiptProblem([file("big.png", "image/png", 10 * 1024 * 1024 + 1)], "picked")).toBe(
       "Files need to be under 10MB.",
@@ -109,6 +123,18 @@ describe("uploadName and receiptKind", () => {
     expect(receiptKind(null, "scan.PDF")).toBe("pdf");
     expect(receiptKind("application/octet-stream", "photo.jpeg")).toBe("image");
     expect(receiptKind("text/plain", "notes.txt")).toBe("other");
+  });
+  it("draws an iPhone HEIC as an image", () => {
+    expect(receiptKind("image/heic")).toBe("image");
+    expect(receiptKind(null, "IMG_1.HEIC")).toBe("image");
+  });
+});
+
+describe("RECEIPT_ACCEPT", () => {
+  it("lists JPEG first (iOS converts a HEIC to the first type), then PNG, PDF and HEIC", () => {
+    expect(RECEIPT_ACCEPT).toBe(
+      "image/jpeg,image/png,application/pdf,image/heic,image/heif,.jpg,.jpeg,.png,.pdf,.heic,.heif",
+    );
   });
 });
 

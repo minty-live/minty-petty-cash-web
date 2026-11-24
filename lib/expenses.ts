@@ -5,6 +5,7 @@
  * Expense Details rows.
  */
 
+import { isHeic } from "@minty/shared/heic";
 import type { ReaderStatus } from "@minty/shared/reader";
 import { parseMoney } from "@/lib/currencyInput";
 import type { OpeningPage } from "@/lib/opening";
@@ -78,8 +79,24 @@ export function searchAccounts(accounts: Account[], typed: string): Account[] {
 
 export const MAX_RECEIPT_BYTES = 10 * 1024 * 1024;
 const RECEIPT_TYPES = ["application/pdf", "image/jpeg", "image/jpg", "image/png"];
+/** A file with no type (Windows and some Android pickers give none) is judged by its name. */
+const RECEIPT_NAME = /\.(pdf|jpe?g|png)$/i;
+
+/**
+ * The receipt picker's `accept`. JPEG first: iOS hands a HEIC photo over as the first type it can
+ * (so most iPhone photos arrive as JPEG), and a camera shot is a JPEG. HEIC is still taken as it
+ * is - from Files, a Mac, an Android phone on "high-efficiency" photos (the user, 2026-11-24).
+ * Mixed with PDF, it also makes Android offer the camera beside its files.
+ */
+export const RECEIPT_ACCEPT =
+  "image/jpeg,image/png,application/pdf,image/heic,image/heif,.jpg,.jpeg,.png,.pdf,.heic,.heif";
 
 type PickedFile = { name: string; size: number; type: string };
+
+function takesReceipt(file: PickedFile): boolean {
+  if (RECEIPT_TYPES.includes(file.type) || isHeic(file.type, file.name)) return true;
+  return !file.type && RECEIPT_NAME.test(file.name);
+}
 
 /**
  * Why a picked or dropped receipt is refused, in Flask's words, or null. A drop names the file, as
@@ -91,7 +108,7 @@ export function receiptProblem(files: PickedFile[], how: "picked" | "dropped"): 
     how === "dropped" ? `${sentence}: ${file.name}` : `${sentence}.`;
   for (const file of files) {
     if (file.size > MAX_RECEIPT_BYTES) return say("Files need to be under 10MB", file);
-    if (!RECEIPT_TYPES.includes(file.type)) return say("I can take PDF, JPEG, or PNG files", file);
+    if (!takesReceipt(file)) return say("I can take PDF, JPEG, PNG, or HEIC files", file);
   }
   return null;
 }
@@ -111,7 +128,7 @@ export function receiptKind(
       .toLowerCase()
       .split("?")[0];
     if (v.startsWith("application/pdf") || /\.pdf$/.test(v)) return "pdf";
-    if (v.startsWith("image/") || /\.(jpe?g|png|gif|webp)$/.test(v)) return "image";
+    if (v.startsWith("image/") || /\.(jpe?g|png|gif|webp|hei[cf])$/.test(v)) return "image";
     return "other";
   };
   const kind = of(typeOrName);

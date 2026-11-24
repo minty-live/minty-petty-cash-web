@@ -11,7 +11,7 @@ import { LeaveDialog } from "@/components/ui/LeaveDialog";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/duplicates";
-import { uploadName, type Account, type Supplier } from "@/lib/expenses";
+import { RECEIPT_ACCEPT, uploadName, type Account, type Supplier } from "@/lib/expenses";
 import { formatMoney } from "@/lib/money";
 import {
   EDIT_SAVED,
@@ -606,14 +606,14 @@ export function LineEditor({
             {receipt ? uploadName(receipt.name) : "Click to change files"}
           </span>
           <span id="editExpFiles_hint" className="mt-1 block text-xs text-flask-gray-400">
-            PDF, JPEG, PNG (Max 10MB)
+            PDF, JPEG, PNG, HEIC (Max 10MB)
           </span>
         </button>
         <input
           ref={fileInput}
           type="file"
           className="hidden"
-          accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+          accept={RECEIPT_ACCEPT}
           aria-label="Choose a new receipt"
           onChange={(e) => {
             pick(e.target.files);

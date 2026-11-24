@@ -2,7 +2,7 @@
 // ReceiptReader.tsx), with the Petty Cash API stubbed: a picked receipt is read, suggestions fill
 // only empty fields, and nothing is sent until Add. The rules themselves: lib/__tests__/expenseAi.test.ts.
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -21,6 +21,7 @@ import { AddExpenseCard, type AddExpenseProps } from "@/components/report/AddExp
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { photoQuality } from "@minty/shared/reader";
 import { resetReaderLatch } from "@/lib/expenseAi";
+import { RECEIPT_ACCEPT } from "@/lib/expenses";
 
 const fetchMock = vi.mocked(pettyCashFetch);
 
@@ -979,5 +980,29 @@ describe("required fields the read left empty", () => {
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     for (const text of [AMOUNT_EMPTY, SUPPLIER_EMPTY, ACCOUNT_EMPTY])
       expect(screen.queryByText(text)).toBeNull();
+  });
+});
+
+describe("an iPhone HEIC receipt (the user, 2026-11-24)", () => {
+  const heic = () => new File(["heic"], "IMG_1.HEIC", { type: "image/heic" });
+
+  it("is offered and taken by the picker, as it is", async () => {
+    show();
+    expect(screen.getByTestId("expense_files").getAttribute("accept")).toBe(RECEIPT_ACCEPT);
+
+    await attach(heic());
+
+    expect(screen.getByRole("img", { name: "Uploaded receipt" })).toBeTruthy();
+  });
+
+  it("shows its name and says it can be seen once saved where the browser can't draw it", async () => {
+    show();
+    await attach(heic());
+
+    fireEvent.error(screen.getByRole("img", { name: "Uploaded receipt" }));
+
+    expect(screen.queryByRole("img", { name: "Uploaded receipt" })).toBeNull();
+    expect(screen.getByText(/"IMG_1\.HEIC" Uploaded/)).toBeTruthy();
+    expect(screen.getByText("This photo can be viewed once it's saved.")).toBeTruthy();
   });
 });

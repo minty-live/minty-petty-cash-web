@@ -1239,7 +1239,7 @@ test("Edit Details: a receipt is checked before it is sent - one PDF, JPEG or PN
     mimeType: "image/gif",
     buffer: Buffer.from("GIF89a"),
   });
-  await expect(modal.getByText("I can take PDF, JPEG, or PNG files.")).toBeVisible();
+  await expect(modal.getByText("I can take PDF, JPEG, PNG, or HEIC files.")).toBeVisible();
   await files.setInputFiles({
     name: "big.png",
     mimeType: "image/png",
