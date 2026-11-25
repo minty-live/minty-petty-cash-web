@@ -226,9 +226,11 @@ export const READ_FAILED = "I couldn't read this receipt. Enter the details your
  */
 export const SEVERAL_RECEIPTS = severalDocuments("receipt");
 
-/** Said with the line under a field outlined to check (the user, 2026-11-25). */
-export const INFERRED_DETAIL = "The receipt doesn't list the items, so this was inferred.";
-export const INFERRED_ACCOUNT_DETAIL = "Chosen to match the inferred description.";
+/** Said with the line under a field outlined to check (the user, 2026-11-25). An inferred description
+ * may also be a summary of listed items, so the line asks for a check, never says the items are
+ * missing (the user, 2026-11-25). */
+export const INFERRED_DETAIL = "Compare the description with the receipt.";
+export const INFERRED_ACCOUNT_DETAIL = "Chosen to match the description.";
 
 /** A required field a read left empty, or Add refused (Part 11: the issue, then the action). */
 export const MISSING_TEXT = {

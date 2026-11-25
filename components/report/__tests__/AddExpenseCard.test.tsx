@@ -963,12 +963,10 @@ describe("the outlines after a read (the user, 2026-11-25)", () => {
     await waitFor(() => expect(description()).toHaveValue("Copy paper"));
     expect(description()).toHaveClass("ring-status-warning-ink");
     expect(description()).toHaveAccessibleDescription(
-      "Please check. The receipt doesn't list the items, so this was inferred.",
+      "Please check. Compare the description with the receipt.",
     );
     expect(account()).toHaveClass("ring-status-warning-ink");
-    expect(account()).toHaveAccessibleDescription(
-      "Please check. Chosen to match the inferred description.",
-    );
+    expect(account()).toHaveAccessibleDescription("Please check. Chosen to match the description.");
     expect(amount()).toHaveClass("ring-border-selected"); // the rest stay teal
   });
 });
