@@ -1152,29 +1152,35 @@ for (const size of [
   { width: 768, height: 1024 },
   { width: 1440, height: 900 },
 ]) {
-  test(`a receipt that doesn't say what was paid for fills nothing and says why (${size.width}px)`, async ({
+  test(`a read outlines an empty description red and the filled amount teal (${size.width}px)`, async ({
     page,
   }) => {
+    // the user, 2026-11-25: the description is not mandatory - red is a warning only
     await page.setViewportSize(size);
     await openWith(page, expensesAnswer(), {
       onExtract: (_req, route) =>
-        route.fulfill({ json: { suggestions: null, reason: "no_description" } }),
+        route.fulfill({
+          json: {
+            suggestions: {
+              amount: { value: "48.80", confidence: 0, band: "medium", applied: true },
+              description: { value: "", confidence: 0, band: "medium", applied: false },
+            },
+            reason: null,
+          },
+        }),
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page, "slip.png");
     await readButton(page).click();
-    const line = page.getByText(
-      "We can't tell what this payment was for, so this document isn't sufficient as a receipt. Please attach a receipt or invoice that shows the goods or services.",
-    );
-    await expect(line).toBeVisible();
-    await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
-    await expect(
-      page.getByText("I couldn't read this receipt. Enter the details yourself."),
-    ).toHaveCount(0);
+    const amount = page.getByRole("textbox", { name: /Expense Amount/ });
+    await expect(amount).toHaveValue("48.80");
+    const description = page.getByRole("textbox", { name: "Description" });
+    await expect(description).toHaveClass(/ring-action-danger/);
+    await expect(amount).toHaveClass(/ring-border-selected/);
     await expectNoHorizontalScroll(page);
-    await line.scrollIntoViewIfNeeded();
+    await description.scrollIntoViewIfNeeded();
     if (process.env.E2E_SHOTS)
-      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-no-evidence-${size.width}.png` });
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-outlines-${size.width}.png` });
   });
 
   test(`several receipts in one file ask for one at a time (${size.width}px)`, async ({ page }) => {
@@ -1188,7 +1194,7 @@ for (const size of [
     await readButton(page).click();
     const dialog = page.getByRole("dialog", { name: "More than one receipt" });
     await expect(dialog).toContainText(
-      "This file contains more than one receipt. Please upload each receipt separately.",
+      "This file seems to contain more than one receipt. Please upload one receipt per entry.",
     );
     await expectNoHorizontalScroll(page);
     if (process.env.E2E_SHOTS)

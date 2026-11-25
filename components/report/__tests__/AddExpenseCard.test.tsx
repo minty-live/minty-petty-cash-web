@@ -367,7 +367,9 @@ describe("the receipt reader in Add New Expense", () => {
     await attachAndRead(png());
     // owner, 2026-11-23: the name goes straight into the Suppliers box, marked as a suggestion
     await waitFor(() => expect(supplier()).toHaveValue("Kwok Transport"));
-    expect(supplier()).toHaveAccessibleDescription("Supplier suggested — please check");
+    // the user, 2026-11-25: a supplier not on the list is outlined orange, "Please check"
+    expect(supplier()).toHaveAccessibleDescription("Please check");
+    expect(supplier()).toHaveClass("ring-status-warning-ink");
     expect(screen.queryByRole("button", { name: /as a new supplier/ })).toBeNull();
     expect(screen.queryByText(/which is not in your supplier list/)).toBeNull();
     // a click on the box offers to add that name; the person's press opens New Contact
@@ -397,7 +399,7 @@ describe("the receipt reader in Add New Expense", () => {
     await attachAndRead(png());
     await waitFor(() => expect(supplier()).toHaveValue("Kwok Transport"));
     expect(supplier()).toHaveAccessibleDescription(
-      "Supplier suggested — please check. It isn't in your contacts yet, so it's added when you save this expense.",
+      "Please check. It isn't in your contacts yet, so it's added when you save this expense.",
     );
     await userEvent.click(screen.getByRole("button", { name: "Add" }));
     await waitFor(() => expect(props.onAdded).toHaveBeenCalled());
@@ -858,10 +860,9 @@ describe("a receipt in another currency", () => {
   });
 });
 
-// Owner's launch decisions, 2026-11-23 (IRD "A Guide to Keeping Business Records").
-const NO_EVIDENCE =
-  "We can't tell what this payment was for, so this document isn't sufficient as a receipt. Please attach a receipt or invoice that shows the goods or services.";
-const SEVERAL = "This file contains more than one receipt. Please upload each receipt separately.";
+// The only refusal, in the user's words (2026-11-25).
+const SEVERAL =
+  "This file seems to contain more than one receipt. Please upload one receipt per entry.";
 const AMOUNT_EMPTY = "The amount is still empty. Add the amount to continue.";
 const SUPPLIER_EMPTY = "The supplier is still empty. Choose a supplier to continue.";
 const ACCOUNT_EMPTY = "The account code is still empty. Choose an account code to continue.";
@@ -902,13 +903,13 @@ describe("a wrong or poor receipt is warned about, never refused (the user, 2026
   it("a refused read that looks like a bank confirmation says that, not the general line", async () => {
     api({
       suggestions: null,
-      reason: "no_description",
+      reason: "several_documents",
       document_warning: "bank_payment_confirmation",
     });
     show();
     await attachAndRead(png("transfer.png"));
     expect(await screen.findByText(BANK)).toBeInTheDocument();
-    expect(screen.queryByText(NO_EVIDENCE)).toBeNull();
+    expect(screen.queryByText(FAILED)).toBeNull();
   });
 
   it("a read with no warning shows none, and another receipt takes a warning away", async () => {
@@ -925,27 +926,50 @@ describe("a wrong or poor receipt is warned about, never refused (the user, 2026
   });
 });
 
-describe("a receipt that doesn't say what was paid for", () => {
-  it("fills nothing and says why - not the failure line, not the caution; the receipt stays", async () => {
-    api({ suggestions: null, reason: "no_description" });
-    show();
+describe("the outlines after a read (the user, 2026-11-25)", () => {
+  const EMPTY_DESCRIPTION = { value: "", confidence: 0, band: "medium", applied: false };
+
+  it("an empty description is outlined red, a warning only: Add saves the line", async () => {
+    const calls = api({ suggestions: { ...SUGGESTIONS, description: EMPTY_DESCRIPTION } });
+    const props = show();
     await attachAndRead(png("slip.png"));
-    expect(await screen.findByText(NO_EVIDENCE)).toHaveAttribute("role", "status");
-    expect(amount()).toHaveValue("");
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(description()).toHaveValue("");
+    expect(description()).toHaveClass("ring-action-danger");
     expect(screen.queryByText(FAILED)).toBeNull();
-    expect(screen.queryByText(CAUTION)).toBeNull();
-    expect(screen.getByRole("button", { name: "Add" })).toBeEnabled(); // never blocks Add
-    expect(screen.queryByText(AMOUNT_EMPTY)).toBeNull(); // a refused read marks nothing
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+    await waitFor(() => expect(props.onAdded).toHaveBeenCalled());
+    expect(calls.adds).toHaveLength(1);
   });
 
-  it("another receipt takes the sentence away", async () => {
-    api({ suggestions: null, reason: "no_description" });
+  it("typing takes the red away", async () => {
+    api({ suggestions: { ...SUGGESTIONS, description: EMPTY_DESCRIPTION } });
     show();
-    await attachAndRead(png("slip.png"));
-    await screen.findByText(NO_EVIDENCE);
-    await attach(png("receipt.png"));
-    expect(screen.queryByText(NO_EVIDENCE)).toBeNull();
+    await attachAndRead(png());
+    await waitFor(() => expect(description()).toHaveClass("ring-action-danger"));
+    await userEvent.type(description(), "Paper");
+    expect(description()).not.toHaveClass("ring-action-danger");
+  });
+
+  it("an inferred description and its account are outlined orange, Please check", async () => {
+    api({
+      suggestions: {
+        ...SUGGESTIONS,
+        description: { ...SUGGESTIONS.description, band: "medium", inferred: true },
+      },
+    });
+    show();
+    await attachAndRead(png());
+    await waitFor(() => expect(description()).toHaveValue("Copy paper"));
+    expect(description()).toHaveClass("ring-status-warning-ink");
+    expect(description()).toHaveAccessibleDescription(
+      "Please check. The receipt doesn't list the items, so this was inferred.",
+    );
+    expect(account()).toHaveClass("ring-status-warning-ink");
+    expect(account()).toHaveAccessibleDescription(
+      "Please check. Chosen to match the inferred description.",
+    );
+    expect(amount()).toHaveClass("ring-border-selected"); // the rest stay teal
   });
 });
 

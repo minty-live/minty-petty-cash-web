@@ -17,6 +17,7 @@
 
 import {
   AllowanceNote,
+  PLEASE_CHECK,
   ReadButton,
   ReaderNote,
   ReadFailedLine,
@@ -31,7 +32,6 @@ import {
 import { pettyCashFetch } from "@/lib/apiClient";
 import {
   CLEAR_LABEL,
-  NO_EVIDENCE,
   READ_FAILED,
   READ_LABEL,
   READING_DETAIL,
@@ -45,7 +45,7 @@ import {
   type Suggestions,
 } from "@/lib/expenseAi";
 
-export { SUGGESTED_RING } from "@minty/shared/reader";
+export { outlineRing } from "@minty/shared/reader";
 
 export const EXTRACT_PATH = "/reports/expenses/extract";
 
@@ -60,8 +60,8 @@ export function useReceiptReader(
   /** The report's day: the rate's day when a receipt in another currency has none (owner, 2026-11-19). */
   day?: string,
   /**
-   * A read the API answered but refused to fill (owner, 2026-11-23): several receipts in the file,
-   * or nothing describes what was paid for. Not a failure: the card says why instead.
+   * A read the API answered but refused to fill: several receipts in the file - the only refusal
+   * (the user, 2026-11-25). Not a failure: the card says why instead.
    */
   onRefused?: (reason: EvidenceRefusal) => void,
   /** What the receipt may be instead (the user, 2026-11-24), or null after each read: a warning only. */
@@ -84,11 +84,6 @@ export function useReceiptReader(
       });
     },
   });
-}
-
-/** A receipt that doesn't say what was paid for (owner, 2026-11-23): where the failure line would go. */
-export function NoEvidenceLine() {
-  return <ReadFailedLine text={NO_EVIDENCE} />;
 }
 
 const ALLOWANCE_ID = "expense_ai_allowance";
@@ -136,12 +131,15 @@ export function ReadFailed() {
 /**
  * Under a suggested field: the sparkle, "<Field> suggested" (and "— please check" for the medium
  * band) and Clear. Its id goes in the field's aria-describedby, so the line is read with the field.
+ * `check`: the field is outlined orange, and the line says "Please check" in the warning ink (the
+ * user, 2026-11-25).
  */
 export function SuggestedLine({
   id,
   field,
   band,
   detail,
+  check = false,
   onClear,
 }: {
   id: string;
@@ -149,14 +147,17 @@ export function SuggestedLine({
   band: Band;
   /** A sentence after it: how a receipt's amount in another currency was converted. */
   detail?: string | null;
+  check?: boolean;
   onClear: () => void;
 }) {
+  const said = check ? PLEASE_CHECK : suggestedText(field, band);
   return (
     <SharedSuggestedLine
       id={id}
-      text={detail ? `${suggestedText(field, band)}. ${detail}` : suggestedText(field, band)}
+      text={detail ? `${said}. ${detail}` : said}
       clearLabel={CLEAR_LABEL}
       onClear={onClear}
+      tone={check ? "check" : "suggested"}
     />
   );
 }

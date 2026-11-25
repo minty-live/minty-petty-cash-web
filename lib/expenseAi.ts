@@ -36,7 +36,7 @@ import {
   createReaderLatch,
   edited as sharedEdited,
   exchangeNote,
-  noEvidenceText,
+  outlined,
   readerState,
   severalDocuments,
   usedNote as sharedUsedNote,
@@ -72,7 +72,8 @@ export type Suggestions = {
   };
   account?: ReadField & { account_id?: string; code?: string; name?: string };
   amount?: ReadField;
-  description?: ReadField;
+  /** `inferred`: the receipt lists no items, so the description was inferred (outlined to check). */
+  description?: ReadField & { inferred?: boolean };
   document_date?: ReadField;
   currency?: string;
   entity_currency?: string | null;
@@ -220,12 +221,14 @@ export const READING_DETAIL =
 export const READ_FAILED = "I couldn't read this receipt. Enter the details yourself.";
 
 /**
- * The owner's launch decisions (2026-11-23, after IRD's "A Guide to Keeping Business Records"): a
- * receipt that doesn't say what was paid for (nothing filled, the card says why under the drop
- * zone), and several receipts in one file (an OK-only question). The receipt stays either way.
+ * Several receipts in one file - the only refusal (the user, 2026-11-25): an OK-only question,
+ * nothing filled, and the receipt stays. The description is not mandatory.
  */
-export const NO_EVIDENCE = noEvidenceText("receipt");
 export const SEVERAL_RECEIPTS = severalDocuments("receipt");
+
+/** Said with the line under a field outlined to check (the user, 2026-11-25). */
+export const INFERRED_DETAIL = "The receipt doesn't list the items, so this was inferred.";
+export const INFERRED_ACCOUNT_DETAIL = "Chosen to match the inferred description.";
 
 /** A required field a read left empty, or Add refused (Part 11: the issue, then the action). */
 export const MISSING_TEXT = {
@@ -424,7 +427,27 @@ export function withSuggestions(
   const date = dateNote(s.document_date, day);
   if (date && parts.length) parts.push(date);
 
-  return { ...state, values, marks, notes, detectedName, announcement: parts.join(" ") };
+  // The outlines (the user, 2026-11-25): red where the read left a field empty (a warning only -
+  // Add is never blocked by it), orange "Please check" on an inferred description and its account,
+  // and on a supplier not on the list.
+  const empty = (
+    [
+      ["amount", emptyText(values.amount)],
+      ["supplier", !values.supplier && emptyText(values.supplierText)],
+      ["account", !values.account && emptyText(values.accountText)],
+      ["description", emptyText(values.description)],
+    ] as const
+  )
+    .filter(([, isEmpty]) => isEmpty)
+    .map(([field]) => field);
+  const check: SuggestedField[] = [];
+  if (s.description?.inferred) check.push("description", "account");
+  if (detectedName && filled.includes("supplier")) check.push("supplier");
+
+  return outlined(
+    { ...state, values, marks, notes, detectedName, announcement: parts.join(" ") },
+    { empty, check },
+  );
 }
 
 const CLEARED: Record<SuggestedField, Partial<EntryValues>> = {

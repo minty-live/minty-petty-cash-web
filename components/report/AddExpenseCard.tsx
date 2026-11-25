@@ -13,15 +13,15 @@ import {
 } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
+import { outlineOf } from "@minty/shared/reader";
 
 import { useToast } from "@/components/flask/Toasts";
 import {
-  NoEvidenceLine,
+  outlineRing,
   ReadFailed,
   ReadingNotice,
   ReadReceiptButton,
   ReceiptNote,
-  SUGGESTED_RING,
   SuggestedLine,
   useReceiptReader,
 } from "@/components/report/ReceiptReader";
@@ -42,6 +42,8 @@ import {
   cleared,
   edited,
   entryState,
+  INFERRED_ACCOUNT_DETAIL,
+  INFERRED_DETAIL,
   MISSING_TEXT,
   NEW_SUPPLIER_DETAIL,
   readNameDetail,
@@ -255,8 +257,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const [rateMissing, setRateMissing] = useState<string | null>(null);
   // the supplier's name as the last read receipt prints it, said beside the picked contact
   const [readName, setReadName] = useState<string | null>(null);
-  // a receipt that isn't one record of a payment (owner, 2026-11-23): nothing filled, and the card
-  // says why - a line under the drop zone, or an OK-only question for several receipts
+  // several receipts in one file - the only refusal (the user, 2026-11-25): nothing filled, and
+  // an OK-only question says why
   const [refused, setRefused] = useState<EvidenceRefusal | null>(null);
   // a wrong or poor receipt (the user, 2026-11-24) - warnings only, Add is never stopped: what the
   // read says it may be instead, and the free photo check (no AI) on the picked photo
@@ -404,6 +406,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
   function readerExtras(field: SuggestedField, inputId: string) {
     const band = entry.marks[field];
     const note = entry.notes[field];
+    // the user, 2026-11-25: an inferred description and its account, or a new supplier - orange
+    const check = outlineOf(entry, field) === "check";
     return (
       <>
         {band ? (
@@ -411,6 +415,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
             id={`${inputId}_suggested`}
             field={field}
             band={band}
+            check={check}
             detail={
               field === "amount"
                 ? convertedDetail
@@ -418,7 +423,11 @@ export function AddExpenseCard(props: AddExpenseProps) {
                   ? NEW_SUPPLIER_DETAIL
                   : field === "supplier" && supplier
                     ? readNameDetail(readName, supplier.name)
-                    : null
+                    : check && field === "description"
+                      ? INFERRED_DETAIL
+                      : check && field === "account"
+                        ? INFERRED_ACCOUNT_DETAIL
+                        : null
             }
             onClear={() => {
               setEntry((state) => cleared(state, field));
@@ -435,7 +444,10 @@ export function AddExpenseCard(props: AddExpenseProps) {
       </>
     );
   }
-  const suggested = (field: SuggestedField) => (entry.marks[field] ? SUGGESTED_RING : "");
+  // the read's outline (the user, 2026-11-25): teal suggested, orange to check, red left empty -
+  // the red is a warning only, and gives way to a required field's own red border and sentence
+  const suggested = (field: SuggestedField) =>
+    field !== "description" && invalid(field) ? "" : outlineRing(entry, field);
   const describedBy = (field: SuggestedField, inputId: string, ...others: (string | null)[]) =>
     [entry.marks[field] ? `${inputId}_suggested` : null, ...others].filter(Boolean).join(" ") ||
     undefined;
@@ -669,8 +681,6 @@ export function AddExpenseCard(props: AddExpenseProps) {
         {documentWarning && !reader.reading ? (
           // the more specific word on a refused read too: "a bank payment confirmation"
           <ReadFailedLine text={documentWarningText(documentWarning, "receipt")} />
-        ) : refused === "no_description" && !reader.reading ? (
-          <NoEvidenceLine />
         ) : null}
         {readerStatus?.enabled === true && file !== null && !readerOff() ? (
           <ReadReceiptButton

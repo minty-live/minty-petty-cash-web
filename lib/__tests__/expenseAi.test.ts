@@ -1,3 +1,4 @@
+import { outlineOf } from "@minty/shared/reader";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
@@ -10,6 +11,7 @@ import {
   readingCopy,
   readSupplier,
   resetReaderLatch,
+  SEVERAL_RECEIPTS,
   suggestedText,
   suggestionsOf,
   usedNote,
@@ -225,6 +227,70 @@ describe("an answer on an empty card", () => {
   it("ignores the currency, as Flask does", () => {
     const s = { ...answer("high"), currency: "USD", entity_currency: "HKD" };
     expect(withSuggestions(entryState(), s, CTX).values.amount).toBe("448.80");
+  });
+});
+
+describe("the outlines after a read (the user, 2026-11-25)", () => {
+  it("a field the read left empty is red - the description too, which is never mandatory", () => {
+    const empty = { ...answer("medium"), description: read("", "medium") };
+    const next = withSuggestions(entryState(), empty, CTX);
+    expect(outlineOf(next, "description")).toBe("empty");
+    expect(outlineOf(next, "amount")).toBe("suggested");
+    const typed = edited(next, "description", { description: "Courier" });
+    expect(outlineOf(typed, "description")).toBeNull();
+  });
+
+  it("an inferred description is filled, and it and its account are outlined to check", () => {
+    const s = answer("medium");
+    const next = withSuggestions(
+      entryState(),
+      { ...s, description: { ...s.description!, inferred: true } },
+      CTX,
+    );
+    expect(next.values.description).toBe("Courier delivery");
+    expect(outlineOf(next, "description")).toBe("check");
+    expect(outlineOf(next, "account")).toBe("check");
+    expect(outlineOf(next, "supplier")).toBe("suggested");
+    expect(outlineOf(next, "amount")).toBe("suggested");
+  });
+
+  it("a supplier not on the list is outlined to check", () => {
+    const next = withSuggestions(
+      entryState(),
+      {
+        ...answer("medium"),
+        supplier: {
+          value: "",
+          confidence: 0,
+          band: "medium",
+          applied: false,
+          contact_id: "",
+          detected_name: "Kwok Transport",
+          new_supplier_token: "signed",
+        },
+      },
+      CTX,
+    );
+    expect(outlineOf(next, "supplier")).toBe("check");
+    expect(outlineOf(next, "description")).toBe("suggested");
+  });
+
+  it("a field the person had filled is theirs: never outlined", () => {
+    const mine = { ...entryState().values, description: "Mine" };
+    const s = answer("medium");
+    const next = withSuggestions(
+      entryState(mine),
+      { ...s, description: { ...s.description!, inferred: true } },
+      CTX,
+    );
+    expect(outlineOf(next, "description")).toBeNull();
+    expect(outlineOf(next, "account")).toBe("check");
+  });
+
+  it("several receipts in one file: the user's words", () => {
+    expect(SEVERAL_RECEIPTS.text).toBe(
+      "This file seems to contain more than one receipt. Please upload one receipt per entry.",
+    );
   });
 });
 
