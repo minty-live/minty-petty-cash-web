@@ -41,8 +41,14 @@ const line = (id: string, item: string, amount: number) => ({
   supplier: { id: "s", name: "Acme" },
   description: "",
   amount,
-  receipts: [],
+  // every line has a receipt: no line is saved without one (the user, 2026-11-25)
+  receipts: [{ id: `rc-${id}`, name: `${id}.png`, mime_type: "image/png" }],
 });
+// a 1x1 PNG
+const PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 
 /** 30 days of history, the day itself (13 OCT, a Tuesday) last at 1,234.50. */
 const HISTORY = Array.from({ length: 30 }, (_, i) => {
@@ -194,6 +200,9 @@ async function stub(page: Page, h: Handlers = {}) {
     share: 0,
     edits: [] as { method: string; path: string; json: Json | null; form: string | null }[],
   };
+  await page.route(`${API}/expense-lines/*/receipts/*`, (route) =>
+    route.fulfill({ body: PNG, contentType: "image/png" }),
+  );
   await page.route(`${API}/reports/${REPORT}`, async (route) => {
     if (route.request().method() === "DELETE") {
       sent.delete += 1;
@@ -1225,6 +1234,37 @@ test("Edit Details: a line sends only what changed; a new account renames it", a
   await expect(page.getByText("Submitted", { exact: true })).toBeVisible();
 });
 
+test("Edit Details: the receipt row's × takes the saved receipt off; Save waits for a new one (the user, 2026-11-25)", async ({
+  page,
+}) => {
+  const answer = edited({});
+  const sent = await openDetails(page, { onEdit: fulfil(answer) });
+  await linesCard(page)
+    .getByRole("button", { name: /Food & Drink/ })
+    .click();
+  const modal = dialog(page);
+  await expect(modal.getByRole("img", { name: "e1.png" })).toBeVisible();
+
+  await modal.getByRole("button", { name: "Remove e1.png" }).click();
+  await expect(modal.getByRole("img", { name: "e1.png" })).toHaveCount(0);
+  await expect(modal.getByText("Click to upload")).toBeVisible();
+  await modal.getByLabel("Description").fill("Team lunch");
+  await modal.getByRole("button", { name: "Save changes" }).click();
+  await expect(
+    modal.getByText("The receipt is still missing. Attach a receipt to continue."),
+  ).toBeVisible();
+  expect(sent.edits).toEqual([]);
+  await expectNoHorizontalScroll(page);
+
+  await modal
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: PNG });
+  await expect(modal.getByRole("button", { name: "Remove new.png" })).toBeVisible();
+  await modal.getByRole("button", { name: "Save changes" }).click();
+  await expect(toast(page, "Expense updated successfully!")).toBeVisible();
+  expect(sent.edits[0].form ?? "").toMatch(/name="receipt"; filename="new.png"/);
+});
+
 test("Edit Details: a receipt is checked before it is sent - one PDF, JPEG or PNG of 10 MB at most", async ({
   page,
 }) => {
@@ -1256,7 +1296,8 @@ test("Edit Details: a receipt is checked before it is sent - one PDF, JPEG or PN
     mimeType: "application/pdf",
     buffer: Buffer.from("%PDF-1.4"),
   });
-  await expect(modal.getByText("receipt.pdf")).toBeVisible();
+  // the new pick in the receipt row, with its Remove (the user, 2026-11-25)
+  await expect(modal.getByRole("button", { name: "Remove receipt.pdf" })).toBeVisible();
   await expect(modal.getByText("Files need to be under 10MB.")).toHaveCount(0);
   await modal.getByRole("button", { name: "Save changes" }).click();
   await expect(toast(page, "Expense updated successfully!")).toBeVisible();

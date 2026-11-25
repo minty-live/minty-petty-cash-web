@@ -1042,6 +1042,15 @@ describe("an iPhone HEIC receipt (the user, 2026-11-24)", () => {
 
 describe("the receipt's preview, as Bills previews an attachment (the user, 2026-11-24)", () => {
   const pdf = () => new File(["%PDF"], "slip.pdf", { type: "application/pdf" });
+  const MILK_LINE = {
+    id: "l1",
+    item: "General Expenses",
+    amount: 12,
+    description: "Milk",
+    supplier: SUPPLIERS[0],
+    account: ACCOUNTS[0],
+    receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+  };
 
   it("draws nothing above the box until a receipt is picked", () => {
     show();
@@ -1141,21 +1150,10 @@ describe("the receipt's preview, as Bills previews an attachment (the user, 2026
     expect(calls.adds).toEqual([]);
   });
 
-  it("Edit Expense never removes the saved receipt; removing a new pick brings it back", async () => {
+  it("Edit Expense: removing a new pick brings the saved receipt back", async () => {
     const calls = api(READER_OFF_ANSWER);
-    const props = show({
-      line: {
-        id: "l1",
-        item: "General Expenses",
-        amount: 12,
-        description: "Milk",
-        supplier: SUPPLIERS[0],
-        account: ACCOUNTS[0],
-        receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
-      },
-    });
+    const props = show({ line: MILK_LINE });
     expect(await screen.findByRole("img", { name: "milk.png" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
 
     await attach(png("new.png"));
     await userEvent.click(screen.getByRole("button", { name: "Remove new.png" }));
@@ -1165,6 +1163,28 @@ describe("the receipt's preview, as Bills previews an attachment (the user, 2026
     await userEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(props.onCancel).toHaveBeenCalled(); // nothing changed, so nothing sent
     expect(calls.edits).toEqual([]);
+  });
+
+  it("Edit Expense: the saved receipt can be removed, and Save is refused until one is attached (the user, 2026-11-25)", async () => {
+    const calls = api(READER_OFF_ANSWER);
+    const props = show({ line: MILK_LINE });
+    await screen.findByRole("img", { name: "milk.png" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove milk.png" }));
+    expect(screen.queryByRole("img", { name: "milk.png" })).toBeNull();
+    expect(screen.getByText("Click to upload or drag and drop")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(
+      screen.getByText("The receipt is still missing. Attach a receipt to continue."),
+    ).toBeInTheDocument();
+    expect(calls.edits).toEqual([]);
+    expect(props.onCancel).not.toHaveBeenCalled();
+
+    await attach(png("new.png"));
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(props.onSaved).toHaveBeenCalled());
+    expect((calls.edits[0].form.get("receipt") as File).name).toBe("new.png");
   });
 
   it("Edit Expense says so when the saved receipt can't be read", async () => {

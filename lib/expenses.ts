@@ -113,6 +113,12 @@ export function receiptProblem(files: PickedFile[], how: "picked" | "dropped"): 
   return null;
 }
 
+/**
+ * No line is saved without a receipt (the user, 2026-11-25): Edit Expense and Edit Details refuse
+ * Save with this once the receipt is removed (Part 11: the issue, then the action).
+ */
+export const RECEIPT_MISSING = "The receipt is still missing. Attach a receipt to continue.";
+
 /** A receipt's file name in the upload box: cut to 27 characters and "..." past 30. */
 export function uploadName(name: string): string {
   return name.length > 30 ? `${name.slice(0, 27)}...` : name;

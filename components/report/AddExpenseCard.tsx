@@ -27,6 +27,7 @@ import {
 } from "@/components/report/ReceiptReader";
 import { DuplicateDialog } from "@/components/report/DuplicateDialog";
 import { receiptPreviewItem, useReceiptUrls } from "@/components/report/receiptPreview";
+import { ReceiptRow } from "@/components/report/ReceiptRow";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
@@ -35,9 +36,7 @@ import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/du
 import {
   AttachmentFullScreenViewer,
   FilePreviewPane,
-  fileIconInfo,
   fileToPreviewItem,
-  requireFilePreviewHost,
   type AttachmentPreviewItem,
 } from "@/lib/filePreview";
 import {
@@ -67,6 +66,7 @@ import {
   missingFields,
   newContactProblem,
   RECEIPT_ACCEPT,
+  RECEIPT_MISSING,
   receiptProblem,
   searchAccounts,
   searchSuppliers,
@@ -314,8 +314,10 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const pickedRef = useRef<Picked | null>(picked);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
-  // Edit Expense: the saved receipt, read for its preview while no other file is picked
-  const savedReceipt = line?.receipts[0] ?? null;
+  // Edit Expense: the saved receipt, read for its preview while no other file is picked; its row's
+  // × takes it off, and Save is then refused until one is attached (the user, 2026-11-25)
+  const [savedRemoved, setSavedRemoved] = useState(false);
+  const savedReceipt = savedRemoved ? null : (line?.receipts[0] ?? null);
   const savedUrls = useReceiptUrls(line);
   const savedGot = savedReceipt ? savedUrls[savedReceipt.id] : undefined;
   // the free photo check on every receipt picked or restored, kept with the file it is about
@@ -492,8 +494,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
       descriptionField.current?.focus();
       return false;
     }
-    // a saved line keeps its receipt unless another is picked
-    const keepsReceipt = line !== null && line.receipts.length > 0;
+    // a saved line keeps its receipt unless another is picked or it was removed
+    const keepsReceipt = savedReceipt !== null;
     const missing = missingFields({
       amount,
       supplierText,
@@ -659,6 +661,7 @@ export function AddExpenseCard(props: AddExpenseProps) {
             : null
         }
         invalid={errors.has("file")}
+        onRemoveKept={() => setSavedRemoved(true)}
         onFile={(f) => {
           revoke(pickedRef.current);
           const next = f ? { file: f, url: URL.createObjectURL(f) } : null;
@@ -1175,11 +1178,11 @@ const DONE_ICON = "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0
  * to 10MB; with a receipt it turns green and names it. Above it, the receipt is previewed as
  * Bills' Add Payment previews an attachment (the user, 2026-11-24; `@minty/shared/filePreview`):
  * its name and size, the photo or every PDF page drawn in a grey pane, and View full in the
- * pane's corner opening it full screen on this page. Under the pane the file sits in a row, as
- * Bills lists an uploaded file, with × to remove a picked one (the user, 2026-11-25); Edit
- * Expense's saved receipt has no × - a line keeps a receipt, so it is replaced, never removed, and
- * removing a new pick brings it back. Edit Expense previews the saved receipt (`saved`) until
- * another is picked. `children` sit right under the box (the receipt reader's "Reading the
+ * pane's corner opening it full screen on this page. Under the pane the file sits in a row
+ * (`ReceiptRow`, as Bills lists an uploaded file) with × (the user, 2026-11-25): on a picked file
+ * it takes it off (Edit Expense's saved receipt comes back), on the saved receipt it calls
+ * `onRemoveKept`, and Add / Save are refused with `RECEIPT_MISSING` under the box until one is
+ * attached. Edit Expense previews the saved receipt (`saved`) until another is picked. `children` sit right under the box (the receipt reader's "Reading the
  * receipt…", where Flask put it).
  */
 function ReceiptDrop({
@@ -1187,6 +1190,7 @@ function ReceiptDrop({
   kept = null,
   saved,
   invalid,
+  onRemoveKept,
   onFile,
   children,
 }: {
@@ -1196,6 +1200,8 @@ function ReceiptDrop({
   /** Edit Expense: the saved receipt once read (`useReceiptUrls`), for its preview. */
   saved?: { item: AttachmentPreviewItem | null; failed: boolean } | null;
   invalid: boolean;
+  /** Edit Expense: the saved receipt's ×. */
+  onRemoveKept?: () => void;
   onFile: (file: File | null) => void;
   children?: ReactNode;
 }) {
@@ -1225,8 +1231,12 @@ function ReceiptDrop({
 
   // the row's file: the picked one, else Edit Expense's saved one
   const rowName = file?.name ?? kept;
-  const rowIcon = rowName ? fileIconInfo(rowName) : null;
-  const iconFont = requireFilePreviewHost().iconClass;
+  function remove() {
+    if (file) onFile(null);
+    else onRemoveKept?.();
+    // the × is gone: the keyboard goes back to the box
+    box.current?.focus();
+  }
 
   const isFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
@@ -1255,38 +1265,15 @@ function ReceiptDrop({
           {saved?.failed ? "This receipt can't be shown here." : "Loading preview…"}
         </div>
       ) : null}
-      {rowName && rowIcon ? (
-        <div className="mb-3 flex min-h-11 min-w-0 items-center gap-2 rounded-flask-lg border border-border-input bg-surface-card py-1 pl-3 pr-1">
-          <span className={`${iconFont} shrink-0 ${rowIcon.iconClass}`} aria-hidden>
-            {rowIcon.icon}
-          </span>
-          <span className="min-w-0 flex-1 text-sm leading-snug text-text-primary [overflow-wrap:anywhere]">
-            {rowName}
-          </span>
-          {file ? (
-            <button
-              type="button"
-              aria-label={`Remove ${file.name}`}
-              onClick={() => {
-                onFile(null);
-                // the × is gone: the keyboard goes back to the box
-                box.current?.focus();
-              }}
-              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-flask-md text-text-muted transition-colors hover:bg-state-hover hover:text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
-            >
-              <span className={iconFont} aria-hidden>
-                close
-              </span>
-            </button>
-          ) : null}
-        </div>
+      {rowName ? (
+        <ReceiptRow name={rowName} onRemove={file || onRemoveKept ? remove : undefined} />
       ) : null}
       <div
         ref={box}
         role="button"
         tabIndex={0}
         aria-labelledby="receipt_label"
-        aria-describedby="receipt_hint"
+        aria-describedby={invalid ? "receipt_hint expense_file_missing" : "receipt_hint"}
         onClick={() => input.current?.click()}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -1370,6 +1357,7 @@ function ReceiptDrop({
           }}
         />
       </div>
+      {invalid ? <FieldMessage id="expense_file_missing">{RECEIPT_MISSING}</FieldMessage> : null}
       {children}
       {/* on the live object URL: replacing the file revokes it and unmounts this in one commit */}
       {viewing && shown ? (

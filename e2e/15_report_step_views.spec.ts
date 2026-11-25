@@ -64,7 +64,8 @@ function reportAnswer(over: Json = {}): Json {
           supplier: { id: "s", name: "Acme" },
           description: "Team lunch",
           amount: 78.5,
-          receipts: [],
+          // no line is saved without a receipt (the user, 2026-11-25)
+          receipts: [{ id: "rc-e1", name: "lunch.png", mime_type: "image/png" }],
         },
         {
           id: "e2",

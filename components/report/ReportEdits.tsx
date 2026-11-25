@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from "react";
 
 import { guardLeave, useLeaveGuard } from "@minty/shared/leaveGuard";
 
@@ -8,10 +16,17 @@ import { useToast } from "@/components/flask/Toasts";
 import { DuplicateDialog } from "@/components/report/DuplicateDialog";
 import { ExpenseDetailsModal, ExpenseRow } from "@/components/report/ExpensesStep";
 import { LeaveDialog } from "@/components/ui/LeaveDialog";
+import { ReceiptRow } from "@/components/report/ReceiptRow";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/duplicates";
-import { RECEIPT_ACCEPT, uploadName, type Account, type Supplier } from "@/lib/expenses";
+import {
+  RECEIPT_ACCEPT,
+  RECEIPT_MISSING,
+  uploadName,
+  type Account,
+  type Supplier,
+} from "@/lib/expenses";
 import { formatMoney } from "@/lib/money";
 import {
   EDIT_SAVED,
@@ -393,6 +408,13 @@ function withCurrent<T extends { id: string }>(list: T[], current: T | null): T[
  * saving?" (owner, 2026-11-17; Flask's discarded them). A changed supplier that makes the line look
  * like another of the day is DUP1's 409: `DuplicateDialog` asks, and Save anyway resends the same
  * changes with `confirm_duplicate=true`.
+ *
+ * The receipt sits in a row (`ReceiptRow`, as Bills lists an uploaded file) with × (the user,
+ * 2026-11-25): on a new pick it takes it off and the saved receipt comes back; on the saved one it
+ * takes that off too (and out of the preview above). No line is saved without a receipt: Save is
+ * then refused with `RECEIPT_MISSING` under the box until one is attached - also on an old line
+ * that never had one. The API keeps the saved receipt unless another is sent, so nothing is lost
+ * until a new one is saved.
  */
 export function LineEditor({
   report,
@@ -419,6 +441,14 @@ export function LineEditor({
   const [accountId, setAccountId] = useState(line.account?.id ?? "");
   const [receipt, setReceipt] = useState<File | null>(null);
   const [receiptRefused, setReceiptRefused] = useState<string | null>(null);
+  // the saved receipt's × (the user, 2026-11-25): gone from the row and the preview until saved
+  const [savedRemoved, setSavedRemoved] = useState(false);
+  const saved = savedRemoved ? null : (line.receipts[0] ?? null);
+  // one identity per state: the preview above reads its receipts by this line's identity
+  const shownLine = useMemo(
+    () => (savedRemoved ? { ...line, receipts: [] } : line),
+    [line, savedRemoved],
+  );
   const [refused, setRefused] = useState<{ field: LineField; message: string } | null>(null);
   const [saving, setSaving] = useState(false);
   const [duplicate, setDuplicate] = useState<{ warning: DuplicateWarning; form: FormData } | null>(
@@ -454,11 +484,26 @@ export function LineEditor({
     setReceipt(problem ? null : file);
   }
 
+  function removeReceipt() {
+    if (receipt) {
+      setReceipt(null);
+      setReceiptRefused(null);
+    } else setSavedRemoved(true);
+    // the × is gone: the keyboard goes back to the box
+    receiptBox.current?.focus();
+  }
+
   async function save(event: FormEvent) {
     event.preventDefault();
     if (saving) return;
     if (descriptionProblem(description)) {
       descriptionField.current?.focus();
+      return;
+    }
+    // no save without a receipt (the user, 2026-11-25)
+    if (!receipt && !saved) {
+      setRefused({ field: "receipt", message: RECEIPT_MISSING });
+      receiptBox.current?.focus();
       return;
     }
     if (!dirty) {
@@ -585,6 +630,9 @@ export function LineEditor({
         <span id="editExpFiles_label" className={EDIT_LABEL}>
           Receipt/Document
         </span>
+        {receipt || saved ? (
+          <ReceiptRow name={receipt?.name ?? saved?.name ?? ""} onRemove={removeReceipt} />
+        ) : null}
         <button
           ref={receiptBox}
           type="button"
@@ -603,7 +651,11 @@ export function LineEditor({
             id="editExpFileText"
             className="block text-sm text-flask-gray-500 [overflow-wrap:anywhere]"
           >
-            {receipt ? uploadName(receipt.name) : "Click to change files"}
+            {receipt
+              ? uploadName(receipt.name)
+              : saved
+                ? "Click to change files"
+                : "Click to upload"}
           </span>
           <span id="editExpFiles_hint" className="mt-1 block text-xs text-flask-gray-400">
             PDF, JPEG, PNG, HEIC (Max 10MB)
@@ -640,7 +692,7 @@ export function LineEditor({
   return (
     <>
       <ExpenseDetailsModal
-        line={line}
+        line={shownLine}
         code={report.currency_code}
         // Close with changes asks "Leave without saving?" (owner, 2026-11-17; Flask discarded them)
         onClose={() => guardLeave(onClose)}

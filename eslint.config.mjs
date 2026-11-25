@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // pdf.js's minified worker, copied in by next.config.ts (gitignored; as in Payment Request)
+    "public/pdfjs/**",
   ]),
   {
     // No native browser dialog anywhere - alert/confirm/prompt or "Leave site?" (owner, 2026-11-16)
