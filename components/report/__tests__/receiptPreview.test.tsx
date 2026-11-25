@@ -1,8 +1,8 @@
-// A receipt shown full screen and a line's receipts read for showing (components/report/
-// ReceiptViewer.tsx). iPhone HEIC (the user, 2026-11-24): stored as uploaded and drawn as it is
+// A line's receipts read for showing, and drawn by the shared preview (components/report/
+// receiptPreview.ts; the viewer itself is @minty/shared/filePreview's since v0.37). iPhone HEIC (the user, 2026-11-24): stored as uploaded and drawn as it is
 // where the browser can; elsewhere the API is asked for a JPEG made on the fly (`?as=jpeg`).
 
-import { fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/apiClient", async (original) => ({
@@ -15,7 +15,7 @@ vi.mock("@minty/shared/heic", async (original) => ({
   browserDrawsHeic: vi.fn(),
 }));
 
-import { ReceiptViewer, useReceiptUrls } from "@/components/report/ReceiptViewer";
+import { receiptPreviewItem, useReceiptUrls } from "@/components/report/receiptPreview";
 import { pettyCashBlob } from "@/lib/apiClient";
 import type { ExpenseLine } from "@/lib/expenses";
 import { browserDrawsHeic } from "@minty/shared/heic";
@@ -95,30 +95,18 @@ describe("useReceiptUrls", () => {
   });
 });
 
-describe("ReceiptViewer", () => {
-  it("says a picked HEIC can be seen once saved, where the browser can't draw it", () => {
-    render(
-      <ReceiptViewer
-        receipt={{ url: "blob:picked", kind: "image", name: "IMG_1.HEIC" }}
-        onClose={vi.fn()}
-      />,
-    );
-
-    fireEvent.error(screen.getByRole("img", { name: "IMG_1.HEIC" }));
-
-    expect(screen.getByText("This photo can be viewed once it's saved.")).toBeTruthy();
+describe("receiptPreviewItem", () => {
+  it("keeps the type the receipt was saved with", () => {
+    expect(
+      receiptPreviewItem({ id: "r1", name: "IMG_1.HEIC", mime_type: "image/heic" }, "blob:a"),
+    ).toEqual({ url: "blob:a", name: "IMG_1.HEIC", mime: "image/heic" });
   });
 
-  it("keeps its own sentence for any other image that won't draw", () => {
-    render(
-      <ReceiptViewer
-        receipt={{ url: "blob:picked", kind: "image", name: "slip.png" }}
-        onClose={vi.fn()}
-      />,
-    );
+  it("reads the name when the type says nothing (B2's octet-stream, or none)", () => {
+    const pdf = { id: "r1", name: "slip.pdf", mime_type: "application/octet-stream" };
+    const old = { id: "r2", name: "slip.PNG", mime_type: null };
 
-    fireEvent.error(screen.getByRole("img", { name: "slip.png" }));
-
-    expect(screen.getByText("This image can't be previewed here.")).toBeTruthy();
+    expect(receiptPreviewItem(pdf, "blob:a").mime).toBe("application/pdf");
+    expect(receiptPreviewItem(old, "blob:b").mime).toBe("image/*");
   });
 });

@@ -118,23 +118,6 @@ export function uploadName(name: string): string {
   return name.length > 30 ? `${name.slice(0, 27)}...` : name;
 }
 
-/** How a receipt can be drawn (Flask's `ReceiptPreview.kind`), from its type, else its name. */
-export function receiptKind(
-  typeOrName: string | null | undefined,
-  name?: string,
-): "image" | "pdf" | "other" {
-  const of = (raw: string | null | undefined) => {
-    const v = String(raw ?? "")
-      .toLowerCase()
-      .split("?")[0];
-    if (v.startsWith("application/pdf") || /\.pdf$/.test(v)) return "pdf";
-    if (v.startsWith("image/") || /\.(jpe?g|png|gif|webp|hei[cf])$/.test(v)) return "image";
-    return "other";
-  };
-  const kind = of(typeOrName);
-  return kind === "other" && name !== undefined ? of(name) : kind;
-}
-
 /** The API's limit on a new contact's name (`MAX_SUPPLIER_NAME` in `routes/expenses.py`). */
 export const MAX_SUPPLIER_NAME = 150;
 

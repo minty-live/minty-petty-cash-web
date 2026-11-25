@@ -9,6 +9,13 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite
 vi.mock("@/lib/apiClient", async (original) => ({
   ...(await original<typeof import("@/lib/apiClient")>()),
   pettyCashFetch: vi.fn(),
+  pettyCashBlob: vi.fn(),
+}));
+// pdf.js needs a canvas, which jsdom has not got: the page renderer is named instead
+vi.mock("@minty/shared/pdfPreview", () => ({
+  PdfJsCanvasPreview: ({ title, src }: { title?: string; src?: string }) => (
+    <div data-pdf={src}>{`pdf: ${title}`}</div>
+  ),
 }));
 // jsdom can't decode a photo: the free photo check is stood in for (the user, 2026-11-24)
 vi.mock("@minty/shared/reader", async (original) => ({
@@ -18,7 +25,7 @@ vi.mock("@minty/shared/reader", async (original) => ({
 
 import { ToastProvider } from "@/components/flask/Toasts";
 import { AddExpenseCard, type AddExpenseProps } from "@/components/report/AddExpenseCard";
-import { ApiError, pettyCashFetch } from "@/lib/apiClient";
+import { ApiError, pettyCashBlob, pettyCashFetch } from "@/lib/apiClient";
 import { photoQuality } from "@minty/shared/reader";
 import { resetReaderLatch } from "@/lib/expenseAi";
 import { RECEIPT_ACCEPT } from "@/lib/expenses";
@@ -150,6 +157,8 @@ beforeAll(() => {
 beforeEach(() => {
   resetReaderLatch();
   vi.mocked(photoQuality).mockResolvedValue(null); // a sharp photo, unless a test says otherwise
+  // Edit Expense reads the saved receipt for its preview
+  vi.mocked(pettyCashBlob).mockResolvedValue(new Blob(["png"], { type: "image/png" }));
 });
 afterEach(() => resetReaderLatch());
 
@@ -952,7 +961,7 @@ describe("several receipts in one file", () => {
     expect(screen.queryByText(FAILED)).toBeNull();
     await userEvent.click(within(dialog).getByRole("button", { name: "OK" }));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(screen.getByRole("img", { name: "Uploaded receipt" })).toBeInTheDocument(); // it stays
+    expect(screen.getByRole("img", { name: "two.png" })).toBeInTheDocument(); // it stays
   });
 });
 
@@ -992,17 +1001,99 @@ describe("an iPhone HEIC receipt (the user, 2026-11-24)", () => {
 
     await attach(heic());
 
-    expect(screen.getByRole("img", { name: "Uploaded receipt" })).toBeTruthy();
+    expect(screen.getByRole("img", { name: "IMG_1.HEIC" })).toBeTruthy();
   });
 
   it("shows its name and says it can be seen once saved where the browser can't draw it", async () => {
     show();
     await attach(heic());
 
-    fireEvent.error(screen.getByRole("img", { name: "Uploaded receipt" }));
+    fireEvent.error(screen.getByRole("img", { name: "IMG_1.HEIC" }));
 
-    expect(screen.queryByRole("img", { name: "Uploaded receipt" })).toBeNull();
+    expect(screen.queryByRole("img", { name: "IMG_1.HEIC" })).toBeNull();
     expect(screen.getByText(/"IMG_1\.HEIC" Uploaded/)).toBeTruthy();
     expect(screen.getByText("This photo can be viewed once it's saved.")).toBeTruthy();
+  });
+});
+
+describe("the receipt's preview, as Bills previews an attachment (the user, 2026-11-24)", () => {
+  const pdf = () => new File(["%PDF"], "slip.pdf", { type: "application/pdf" });
+
+  it("draws nothing above the box until a receipt is picked", () => {
+    show();
+
+    expect(screen.queryByText("Document preview")).toBeNull();
+    expect(screen.queryByRole("button", { name: /View full/ })).toBeNull();
+  });
+
+  it("names a picked photo and its size and draws it in the pane", async () => {
+    show();
+    await attach(png("taxi.png"));
+
+    expect(screen.getByText(/^Document preview/)).toHaveTextContent("Document preview • 3 B");
+    expect(screen.getByRole("img", { name: "taxi.png" }).getAttribute("src")).toMatch(/^blob:/);
+    expect(screen.getByText('"taxi.png" Uploaded')).toBeInTheDocument();
+  });
+
+  it("draws a picked PDF's pages, not only its name", async () => {
+    show();
+    await attach(pdf());
+
+    expect(screen.getByText("pdf: slip.pdf").getAttribute("data-pdf")).toMatch(/^blob:/);
+  });
+
+  it("opens it full screen on this page from View full, and Escape closes only the preview", async () => {
+    show();
+    await attach(pdf());
+
+    await userEvent.click(screen.getByRole("button", { name: "View full — slip.pdf" }));
+    const viewer = screen.getByRole("dialog", { name: "slip.pdf" });
+    expect(viewer.querySelector('[target="_blank"], [download]')).toBeNull();
+
+    await userEvent.keyboard("{Escape}");
+    expect(screen.queryByRole("dialog", { name: "slip.pdf" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Add New Expense" })).toBeInTheDocument();
+  });
+
+  it("Edit Expense previews the saved receipt until another is picked", async () => {
+    vi.mocked(pettyCashBlob).mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+    api(READER_OFF_ANSWER);
+    show({
+      line: {
+        id: "l1",
+        item: "General Expenses",
+        amount: 12,
+        description: "Milk",
+        supplier: SUPPLIERS[0],
+        account: ACCOUNTS[0],
+        receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+      },
+    });
+
+    expect(screen.getByText("Loading preview…")).toBeInTheDocument();
+    expect(await screen.findByRole("img", { name: "milk.png" })).toBeInTheDocument();
+    expect(vi.mocked(pettyCashBlob)).toHaveBeenCalledWith("/expense-lines/l1/receipts/r1");
+
+    await attach(png("new.png"));
+    expect(screen.getByRole("img", { name: "new.png" })).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: "milk.png" })).toBeNull();
+  });
+
+  it("Edit Expense says so when the saved receipt can't be read", async () => {
+    vi.mocked(pettyCashBlob).mockRejectedValue(new Error("404"));
+    api(READER_OFF_ANSWER);
+    show({
+      line: {
+        id: "l1",
+        item: "General Expenses",
+        amount: 12,
+        description: "Milk",
+        supplier: SUPPLIERS[0],
+        account: ACCOUNTS[0],
+        receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+      },
+    });
+
+    expect(await screen.findByText("This receipt can't be shown here.")).toBeInTheDocument();
   });
 });

@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import { copyPdfjsAssets } from "@minty/shared/next";
+
+// pdf.js's worker, cMaps and fonts into /public/pdfjs (gitignored), served same-origin for the
+// receipt preview (@minty/shared/pdfPreview). Here because Node evaluates this file at the start
+// of dev and build.
+copyPdfjsAssets();
 
 /**
  * Sent with every response - the same values as minty-web, minty-payment-request-web and

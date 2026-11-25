@@ -26,12 +26,18 @@ import {
   useReceiptReader,
 } from "@/components/report/ReceiptReader";
 import { DuplicateDialog } from "@/components/report/DuplicateDialog";
-import { ReceiptViewer, type ShownReceipt } from "@/components/report/ReceiptViewer";
+import { receiptPreviewItem, useReceiptUrls } from "@/components/report/receiptPreview";
 import { FieldMessage } from "@/components/report/ReportChrome";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { parseMoney } from "@/lib/currencyInput";
 import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/duplicates";
+import {
+  AttachmentFullScreenViewer,
+  FilePreviewPane,
+  fileToPreviewItem,
+  type AttachmentPreviewItem,
+} from "@/lib/filePreview";
 import {
   cleared,
   edited,
@@ -57,7 +63,6 @@ import {
   missingFields,
   newContactProblem,
   RECEIPT_ACCEPT,
-  receiptKind,
   receiptProblem,
   searchAccounts,
   searchSuppliers,
@@ -305,6 +310,10 @@ export function AddExpenseCard(props: AddExpenseProps) {
   const pickedRef = useRef<Picked | null>(picked);
   useEffect(() => () => revoke(pickedRef.current), []);
   const file = picked?.file ?? null;
+  // Edit Expense: the saved receipt, read for its preview while no other file is picked
+  const savedReceipt = line?.receipts[0] ?? null;
+  const savedUrls = useReceiptUrls(line);
+  const savedGot = savedReceipt ? savedUrls[savedReceipt.id] : undefined;
   // the free photo check on every receipt picked or restored, kept with the file it is about
   useEffect(() => {
     if (!file) return;
@@ -626,7 +635,15 @@ export function AddExpenseCard(props: AddExpenseProps) {
 
       <ReceiptDrop
         picked={picked}
-        kept={line && line.receipts.length > 0 ? line.receipts[0].name : null}
+        kept={savedReceipt?.name ?? null}
+        saved={
+          savedReceipt
+            ? {
+                item: savedGot?.url ? receiptPreviewItem(savedReceipt, savedGot.url) : null,
+                failed: savedGot?.failed === true,
+              }
+            : null
+        }
         invalid={errors.has("file")}
         onFile={(f) => {
           revoke(pickedRef.current);
@@ -1142,14 +1159,18 @@ const UPLOAD_ICON =
 const DONE_ICON = "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z";
 
 /**
- * Flask's `#uploadArea`: a dashed box to click or drop a receipt on, PDF / JPEG / PNG up to 10MB.
- * With a picture it shows the picture (borderless, 256 x 192); with a PDF it turns green and names
- * it. The expand button in its corner opens the picked file full screen. `children` sit right
- * under the box (the receipt reader's "Reading the receipt…", where Flask put it).
+ * Flask's `#uploadArea`: a dashed box to click or drop a receipt on, PDF / JPEG / PNG / HEIC up
+ * to 10MB; with a receipt it turns green and names it. Above it, the receipt is previewed as
+ * Bills' Add Payment previews an attachment (the user, 2026-11-24; `@minty/shared/filePreview`):
+ * its name and size, the photo or every PDF page drawn in a grey pane, and View full in the
+ * pane's corner opening it full screen on this page. Edit Expense previews the saved receipt
+ * (`saved`) until another is picked. `children` sit right under the box (the receipt reader's
+ * "Reading the receipt…", where Flask put it).
  */
 function ReceiptDrop({
   picked,
   kept = null,
+  saved,
   invalid,
   onFile,
   children,
@@ -1157,6 +1178,8 @@ function ReceiptDrop({
   picked: Picked | null;
   /** Edit Expense: the saved receipt's name, shown until another file is picked. */
   kept?: string | null;
+  /** Edit Expense: the saved receipt once read (`useReceiptUrls`), for its preview. */
+  saved?: { item: AttachmentPreviewItem | null; failed: boolean } | null;
   invalid: boolean;
   onFile: (file: File | null) => void;
   children?: ReactNode;
@@ -1164,12 +1187,13 @@ function ReceiptDrop({
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const [viewing, setViewing] = useState<ShownReceipt | null>(null);
-  /** The picked photo's URL when this browser can't draw it (an iPhone HEIC outside Safari). */
-  const [unshown, setUnshown] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
   const file = picked?.file ?? null;
-  const url = picked?.url ?? null;
-  const kind = file ? receiptKind(file.type, file.name) : null;
+
+  // the picked file, else the saved receipt once its bytes are here
+  let shown: { item: AttachmentPreviewItem; size?: number } | null = null;
+  if (picked) shown = { item: fileToPreviewItem(picked.file, picked.url), size: picked.file.size };
+  else if (kept && saved?.item) shown = { item: saved.item };
 
   function take(files: File[], how: "picked" | "dropped") {
     if (files.length === 0) return; // the picker was cancelled: the file stays
@@ -1187,7 +1211,6 @@ function ReceiptDrop({
 
   let look: string;
   if (dragging) look = "border-2 border-dashed border-flask-blue-500 bg-flask-blue-50 p-6";
-  else if (file && kind === "image" && unshown !== url) look = "border-0 bg-transparent p-0";
   else if (file || kept)
     look = "border-2 border-dashed border-flask-upload-ok bg-flask-upload-ok-bg p-6";
   else
@@ -1198,6 +1221,19 @@ function ReceiptDrop({
       <span id="receipt_label" className={LABEL}>
         Receipt/Document <Star />
       </span>
+      {shown ? (
+        <div className="mb-3 min-w-0">
+          <FilePreviewPane
+            item={shown.item}
+            size={shown.size}
+            onViewFull={() => setViewing(true)}
+          />
+        </div>
+      ) : kept && !file ? (
+        <div className="mb-3 flex min-h-[156px] items-center justify-center rounded-flask-md border-2 border-dashed border-flask-gray-300 bg-flask-gray-50 px-4 text-center text-sm text-flask-gray-500">
+          {saved?.failed ? "This receipt can't be shown here." : "Loading preview…"}
+        </div>
+      ) : null}
       <div
         role="button"
         tabIndex={0}
@@ -1232,105 +1268,45 @@ function ReceiptDrop({
         }}
         className={`relative cursor-pointer overflow-hidden rounded-flask-md text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus ${look}`}
       >
-        <button
-          type="button"
-          aria-label="Preview receipt"
-          disabled={!file || !url}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (file && url && kind) setViewing({ url, kind, name: file.name });
-          }}
-          className={`absolute bottom-2 right-2 z-10 rounded-full bg-flask-white p-2 shadow-flask-sm ${
-            file && url
-              ? "cursor-pointer text-flask-gray-500 hover:text-flask-gray-500/80"
-              : "cursor-not-allowed text-flask-gray-400 opacity-50"
-          }`}
+        <svg
+          className={`mx-auto mb-4 h-12 w-12 ${(file || kept) && !dragging ? "text-flask-upload-ok" : "text-flask-gray-400"}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          aria-hidden="true"
         >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth="1.5"
-            stroke="currentColor"
-            className="size-6 transition-colors"
-            aria-hidden="true"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
-            />
-          </svg>
-        </button>
-
-        {file && kind === "image" && url && !dragging && unshown !== url ? (
-          <div className="m-0 p-0 leading-[0]">
-            {/* eslint-disable-next-line @next/next/no-img-element -- an object URL of the picked file */}
-            <img
-              src={url}
-              alt="Uploaded receipt"
-              // a photo this browser can't draw (an iPhone HEIC outside Safari): its name instead
-              onError={() => setUnshown(url)}
-              className="mx-auto h-48 w-64 max-w-full object-contain"
-            />
-            <span id="receipt_hint" className="sr-only">
+          {(file || kept) && !dragging ? (
+            <path strokeLinecap="round" strokeLinejoin="round" d={DONE_ICON} />
+          ) : (
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={UPLOAD_ICON} />
+          )}
+        </svg>
+        {file && !dragging ? (
+          <>
+            <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
+              &quot;{uploadName(file.name)}&quot; Uploaded
+            </p>
+            <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
               Click to change files
-            </span>
-          </div>
+            </p>
+          </>
+        ) : kept && !dragging ? (
+          <>
+            <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
+              &quot;{uploadName(kept)}&quot; Attached
+            </p>
+            <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
+              Click to change files
+            </p>
+          </>
         ) : (
           <>
-            <svg
-              className={`mx-auto mb-4 h-12 w-12 ${(file || kept) && !dragging ? "text-flask-upload-ok" : "text-flask-gray-400"}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              {(file || kept) && !dragging ? (
-                <path strokeLinecap="round" strokeLinejoin="round" d={DONE_ICON} />
-              ) : (
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d={UPLOAD_ICON}
-                />
-              )}
-            </svg>
-            {file && !dragging ? (
-              <>
-                <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
-                  &quot;{uploadName(file.name)}&quot; Uploaded
-                </p>
-                <p
-                  id="receipt_hint"
-                  // clear of the corner preview button when the sentence wraps on a phone
-                  className={`mt-1 text-xs text-flask-gray-500 ${unshown === url ? "px-10" : ""}`}
-                >
-                  {unshown === url
-                    ? "This photo can be viewed once it's saved."
-                    : "Click to change files"}
-                </p>
-              </>
-            ) : kept && !dragging ? (
-              <>
-                <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
-                  &quot;{uploadName(kept)}&quot; Attached
-                </p>
-                <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-                  Click to change files
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm font-medium text-flask-gray-700">
-                  Click to upload or drag and drop
-                </p>
-                <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-                  PDF, JPEG, PNG, HEIC (Max 10MB)
-                </p>
-              </>
-            )}
+            <p className="text-sm font-medium text-flask-gray-700">
+              Click to upload or drag and drop
+            </p>
+            <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
+              PDF, JPEG, PNG, HEIC (Max 10MB)
+            </p>
           </>
         )}
         <input
@@ -1347,7 +1323,10 @@ function ReceiptDrop({
         />
       </div>
       {children}
-      {viewing ? <ReceiptViewer receipt={viewing} onClose={() => setViewing(null)} /> : null}
+      {/* on the live object URL: replacing the file revokes it and unmounts this in one commit */}
+      {viewing && shown ? (
+        <AttachmentFullScreenViewer item={shown.item} onClose={() => setViewing(false)} />
+      ) : null}
     </div>
   );
 }

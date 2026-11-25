@@ -241,7 +241,7 @@ async function fillAdd(page: Page) {
   await page
     .getByTestId("expense_files")
     .setInputFiles({ name: "toner.png", mimeType: "image/png", buffer: PNG });
-  await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "toner.png" })).toBeVisible();
 }
 
 test("Flask's list: each line, its supplier and description, the red amount, and the total", async ({
@@ -365,6 +365,48 @@ test("a receipt that is not a PDF, JPEG or PNG is refused in Flask's words", asy
   await expect(page.getByText('"scan.pdf" Uploaded')).toBeVisible();
   await expect(page.getByText("Click to change files")).toBeVisible();
 });
+
+// the smallest PDF that opens: one empty page
+const RECEIPT_PDF = Buffer.from(
+  "%PDF-1.1\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n" +
+    "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n",
+  "binary",
+);
+
+for (const size of [
+  { width: 360, height: 740 },
+  { width: 768, height: 1024 },
+  { width: 1440, height: 900 },
+]) {
+  test(`a picked receipt is previewed as Bills previews an attachment, its PDF pages drawn (${size.width}px)`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(size);
+    await openWith(page, expensesAnswer());
+    await page.getByRole("button", { name: "Add New Expense" }).click();
+    await page
+      .getByTestId("expense_files")
+      .setInputFiles({ name: "slip.pdf", mimeType: "application/pdf", buffer: RECEIPT_PDF });
+
+    await expect(page.getByText(/^Document preview/)).toBeVisible();
+    // pdf.js drew the page from the app's own /pdfjs (no CDN)
+    await expect(page.getByRole("img", { name: "slip.pdf — page 1 of 1" })).toBeVisible();
+    await expect(page.getByText('"slip.pdf" Uploaded')).toBeVisible();
+    await expectNoHorizontalScroll(page);
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-receipt-pane-${size.width}.png` });
+
+    await page.getByRole("button", { name: "View full — slip.pdf" }).click();
+    const viewer = page.getByRole("dialog", { name: "slip.pdf" });
+    await expect(viewer.getByRole("img", { name: "slip.pdf — page 1 of 1" })).toBeVisible();
+    await expect(viewer.locator('[target="_blank"], [download]')).toHaveCount(0);
+    if (process.env.E2E_SHOTS)
+      await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-receipt-full-${size.width}.png` });
+    await page.keyboard.press("Escape");
+    await expect(viewer).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Add New Expense" })).toBeVisible();
+  });
+}
 
 test("the server's refusal is shown as it says it, and the card stays open", async ({ page }) => {
   const why = "Keep the description to 300 characters or fewer.";
@@ -555,8 +597,8 @@ test("a line opens Expense Details with its receipt, which opens full screen", a
   await expect(thumb).toHaveAttribute("src", /^blob:/);
   await expect.poll(() => thumb.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(1);
 
-  await dialog.getByRole("button", { name: "Open milk.png" }).click();
-  const viewer = page.getByRole("dialog", { name: "Receipt" });
+  await dialog.getByRole("button", { name: "View full — milk.png" }).click();
+  const viewer = page.getByRole("dialog", { name: "milk.png" });
   await expect(viewer).toBeVisible();
   await expect(viewer.getByRole("img", { name: "milk.png" })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -647,7 +689,7 @@ test("Edit in Expense Details opens the card; a new receipt replaces the line's"
   await page
     .getByTestId("expense_files")
     .setInputFiles({ name: "new.png", mimeType: "image/png", buffer: PNG });
-  await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "new.png" })).toBeVisible();
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(toast(page, "Expense updated successfully!")).toBeVisible();
   expect(partNames(sent)).toEqual(["receipt"]);
@@ -1153,7 +1195,7 @@ for (const size of [
       await page.screenshot({ path: `${process.env.E2E_SHOTS}/pc-several-${size.width}.png` });
     await dialog.getByRole("button", { name: "OK" }).click();
     await expect(dialog).toHaveCount(0);
-    await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+    await expect(page.getByRole("img", { name: "two.png" })).toBeVisible();
     await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
   });
 
@@ -1317,7 +1359,7 @@ test("the reader switched off on the API offers no button and reads nothing", as
   });
   await page.getByRole("button", { name: "Add New Expense" }).click();
   await attachReceipt(page);
-  await expect(page.getByRole("img", { name: "Uploaded receipt" })).toBeVisible();
+  await expect(page.getByRole("img", { name: "taxi.png" })).toBeVisible();
   await expect(readButton(page)).toHaveCount(0);
   expect(reads).toBe(0);
 });
@@ -1339,9 +1381,7 @@ test("a reader switched off since the page loaded says nothing and is not offere
   await expect(page.getByText("Reading the receipt…")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
   await attachReceipt(page, "two.png");
-  await expect(
-    page.getByText('"two.png" Uploaded').or(page.getByRole("img", { name: "Uploaded receipt" })),
-  ).toBeVisible();
+  await expect(page.getByText('"two.png" Uploaded')).toBeVisible();
   await expect(readButton(page)).toHaveCount(0);
   expect(reads).toBe(1);
 });

@@ -8,7 +8,6 @@ import {
   missingFields,
   newContactProblem,
   RECEIPT_ACCEPT,
-  receiptKind,
   receiptProblem,
   searchAccounts,
   searchSuppliers,
@@ -111,22 +110,11 @@ describe("receiptProblem", () => {
   });
 });
 
-describe("uploadName and receiptKind", () => {
+describe("uploadName", () => {
   it("cuts a long name to 27 characters", () => {
     expect(uploadName("receipt.pdf")).toBe("receipt.pdf");
     expect(uploadName("a".repeat(30))).toBe("a".repeat(30));
     expect(uploadName(`${"a".repeat(28)}.pdf`)).toBe(`${"a".repeat(27)}...`);
-  });
-  it("draws by type, else by name", () => {
-    expect(receiptKind("image/png")).toBe("image");
-    expect(receiptKind("application/pdf")).toBe("pdf");
-    expect(receiptKind(null, "scan.PDF")).toBe("pdf");
-    expect(receiptKind("application/octet-stream", "photo.jpeg")).toBe("image");
-    expect(receiptKind("text/plain", "notes.txt")).toBe("other");
-  });
-  it("draws an iPhone HEIC as an image", () => {
-    expect(receiptKind("image/heic")).toBe("image");
-    expect(receiptKind(null, "IMG_1.HEIC")).toBe("image");
   });
 });
 

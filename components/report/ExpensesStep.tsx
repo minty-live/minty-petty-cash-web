@@ -13,11 +13,7 @@ import { useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
 import { QuestionDialog } from "@/components/ui/QuestionDialog";
 import { AddExpenseCard, type AddExpenseHandle } from "@/components/report/AddExpenseCard";
-import {
-  ReceiptViewer,
-  useReceiptUrls,
-  type ShownReceipt,
-} from "@/components/report/ReceiptViewer";
+import { receiptPreviewItem, useReceiptUrls } from "@/components/report/receiptPreview";
 import { LoadingOverlay, Modal, ReportBadge } from "@/components/report/ReportChrome";
 import { sentenceOf, toOpening, useBackToOpening } from "@/components/report/stepErrors";
 import { entityAcronym } from "@/lib/acronym";
@@ -25,13 +21,13 @@ import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome } from "@/lib/companyPages";
 import { currentDraftScope } from "@/lib/draftScope";
 import { EMPTY_VALUES, type EntryValues } from "@/lib/expenseAi";
+import { detailRows, type ExpenseLine, type ExpensesPage, type Supplier } from "@/lib/expenses";
 import {
-  detailRows,
-  receiptKind,
-  type ExpenseLine,
-  type ExpensesPage,
-  type Supplier,
-} from "@/lib/expenses";
+  AttachmentFullScreenViewer,
+  PreviewBlock,
+  ViewFullButton,
+  type AttachmentPreviewItem,
+} from "@/lib/filePreview";
 import { formatMoney } from "@/lib/money";
 import { datePill } from "@/lib/opening";
 import { alreadySavedOf, expensesSavedRows } from "@/lib/stepConflict";
@@ -611,27 +607,10 @@ const PENCIL = (
   </svg>
 );
 
-const EXPAND = (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    fill="none"
-    viewBox="0 0 24 24"
-    strokeWidth="1.5"
-    stroke="currentColor"
-    className="h-8 w-8 text-flask-white opacity-0 transition-opacity group-hover:opacity-100"
-    aria-hidden="true"
-  >
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
-    />
-  </svg>
-);
-
 /**
- * Flask's "Expense Details" (#viewExpenseModal): the receipt first (a picture as a 256px tile that
- * opens full screen; a PDF as a tile with its name and "Open"), "Amount Paid", then Contact Name,
+ * Flask's "Expense Details" (#viewExpenseModal): the receipt first, drawn as Bills draws an
+ * attachment (the user, 2026-11-24; `@minty/shared/filePreview`: the photo or every PDF page in a
+ * grey pane, View full in its corner opening it full screen), "Amount Paid", then Contact Name,
  * Description and Account in a grey box, and Close.
  *
  * With `editor` (a submitted report's Edit Details, Flask's report_edit mode) the editor takes the
@@ -656,7 +635,7 @@ export function ExpenseDetailsModal({
   onEdit?: () => void;
 }) {
   const urls = useReceiptUrls(line);
-  const [shown, setShown] = useState<ShownReceipt | null>(null);
+  const [shown, setShown] = useState<AttachmentPreviewItem | null>(null);
   const rows = detailRows(line);
   const closeViewer = useCallback(() => setShown(null), []);
   // while the receipt is open full screen, Escape and outside clicks belong to it
@@ -683,82 +662,23 @@ export function ExpenseDetailsModal({
               className={`grid gap-2 ${line.receipts.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
             >
               {line.receipts.map((receipt) => {
-                const kind = receiptKind(receipt.mime_type, receipt.name);
                 const got = urls[receipt.id];
-                const open = () => got?.url && setShown({ url: got.url, kind, name: receipt.name });
-                if (kind === "image") {
-                  return (
-                    <button
-                      key={receipt.id}
-                      type="button"
-                      onClick={open}
-                      aria-label={`Open ${receipt.name}`}
-                      className="group relative block w-full cursor-pointer"
-                    >
-                      {got?.url ? (
-                        // eslint-disable-next-line @next/next/no-img-element -- an object URL of the receipt's bytes
-                        <img
-                          src={got.url}
-                          alt={receipt.name}
-                          className="pointer-events-none h-64 w-full rounded-flask-lg border border-flask-gray-200 object-cover transition-colors group-hover:border-flask-selected-edge"
-                        />
-                      ) : (
-                        <div className="flex h-64 w-full items-center justify-center rounded-flask-lg border border-flask-gray-200 bg-flask-gray-50 px-4 text-center text-sm text-flask-gray-500">
-                          {got?.failed ? "This image can't be previewed here." : "Loading…"}
-                        </div>
-                      )}
-                      <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-flask-lg bg-flask-black/0 transition-opacity group-hover:bg-flask-black/20">
-                        {EXPAND}
-                      </div>
-                    </button>
-                  );
-                }
-                if (kind === "pdf") {
-                  return (
-                    <button
-                      key={receipt.id}
-                      type="button"
-                      onClick={open}
-                      className="group relative flex h-64 w-full cursor-pointer flex-col items-center justify-center gap-2 overflow-hidden rounded-flask-lg border border-flask-gray-200 bg-flask-gray-50 px-4 text-center transition-colors hover:border-flask-selected-edge"
-                    >
-                      <PdfIcon />
-                      <span className="w-full truncate text-sm text-flask-gray-700">
-                        {receipt.name}
-                      </span>
-                      <span className="text-sm font-medium text-flask-link">
-                        {got?.failed ? "This PDF can't be previewed here." : "Open"}
-                      </span>
-                    </button>
-                  );
-                }
+                const item = got?.url ? receiptPreviewItem(receipt, got.url) : null;
                 return (
                   <div
                     key={receipt.id}
-                    className="rounded-flask-lg border border-flask-gray-200 p-2"
+                    className="relative max-h-[min(60vh,32rem)] min-h-40 min-w-0 overflow-auto rounded-flask-lg border border-flask-gray-200 bg-flask-gray-50 p-2"
                   >
-                    <button
-                      type="button"
-                      onClick={() =>
-                        got?.url && setShown({ url: got.url, kind: "other", name: receipt.name })
-                      }
-                      className="flex min-h-[44px] w-full items-center text-left text-sm text-flask-blue-600 hover:text-flask-blue-800"
-                    >
-                      <svg
-                        className="mr-2 h-4 w-4 shrink-0"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                        />
-                      </svg>
-                      <span className="min-w-0 [overflow-wrap:anywhere]">{receipt.name}</span>
-                    </button>
+                    {item ? (
+                      <>
+                        <ViewFullButton name={receipt.name} onClick={() => setShown(item)} />
+                        <PreviewBlock {...item} />
+                      </>
+                    ) : (
+                      <div className="flex min-h-36 items-center justify-center px-4 text-center text-sm text-flask-gray-500 [overflow-wrap:anywhere]">
+                        {got?.failed ? `${receipt.name} can't be shown here.` : "Loading…"}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -799,7 +719,7 @@ export function ExpenseDetailsModal({
           <span>Close</span>
         </button>
       </div>
-      {shown ? <ReceiptViewer receipt={shown} onClose={closeViewer} /> : null}
+      {shown ? <AttachmentFullScreenViewer item={shown} onClose={closeViewer} /> : null}
     </Modal>
   );
 }
@@ -812,26 +732,6 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         {value}
       </span>
     </div>
-  );
-}
-
-function PdfIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      fill="none"
-      viewBox="0 0 24 24"
-      strokeWidth="1.5"
-      stroke="currentColor"
-      className="h-12 w-12 text-flask-gray-400"
-      aria-hidden="true"
-    >
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"
-      />
-    </svg>
   );
 }
 

@@ -445,7 +445,7 @@ describe("Expenses", () => {
     expectNothingDrawn();
     expect(screen.getByRole("combobox", { name: /Suppliers/ })).toHaveValue("Wellcome");
     // the receipt came back from the draft's file store
-    expect(screen.getByRole("img", { name: "Uploaded receipt" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "taxi.png" })).toBeInTheDocument();
   });
 
   it("keeps it through DUP1's 409 until the line is added, then clears it", async () => {
