@@ -35,7 +35,9 @@ import { CONFIRM_DUPLICATE, duplicatesOf, type DuplicateWarning } from "@/lib/du
 import {
   AttachmentFullScreenViewer,
   FilePreviewPane,
+  fileIconInfo,
   fileToPreviewItem,
+  requireFilePreviewHost,
   type AttachmentPreviewItem,
 } from "@/lib/filePreview";
 import {
@@ -1173,9 +1175,12 @@ const DONE_ICON = "M9 12.75 11.25 15 15 9.75M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0
  * to 10MB; with a receipt it turns green and names it. Above it, the receipt is previewed as
  * Bills' Add Payment previews an attachment (the user, 2026-11-24; `@minty/shared/filePreview`):
  * its name and size, the photo or every PDF page drawn in a grey pane, and View full in the
- * pane's corner opening it full screen on this page. Edit Expense previews the saved receipt
- * (`saved`) until another is picked. `children` sit right under the box (the receipt reader's
- * "Reading the receipt…", where Flask put it).
+ * pane's corner opening it full screen on this page. Under the pane the file sits in a row, as
+ * Bills lists an uploaded file, with × to remove a picked one (the user, 2026-11-25); Edit
+ * Expense's saved receipt has no × - a line keeps a receipt, so it is replaced, never removed, and
+ * removing a new pick brings it back. Edit Expense previews the saved receipt (`saved`) until
+ * another is picked. `children` sit right under the box (the receipt reader's "Reading the
+ * receipt…", where Flask put it).
  */
 function ReceiptDrop({
   picked,
@@ -1196,6 +1201,7 @@ function ReceiptDrop({
 }) {
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const [viewing, setViewing] = useState(false);
   const file = picked?.file ?? null;
@@ -1216,6 +1222,11 @@ function ReceiptDrop({
     }
     onFile(files[0]);
   }
+
+  // the row's file: the picked one, else Edit Expense's saved one
+  const rowName = file?.name ?? kept;
+  const rowIcon = rowName ? fileIconInfo(rowName) : null;
+  const iconFont = requireFilePreviewHost().iconClass;
 
   const isFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
@@ -1244,7 +1255,34 @@ function ReceiptDrop({
           {saved?.failed ? "This receipt can't be shown here." : "Loading preview…"}
         </div>
       ) : null}
+      {rowName && rowIcon ? (
+        <div className="mb-3 flex min-h-11 min-w-0 items-center gap-2 rounded-flask-lg border border-border-input bg-surface-card py-1 pl-3 pr-1">
+          <span className={`${iconFont} shrink-0 ${rowIcon.iconClass}`} aria-hidden>
+            {rowIcon.icon}
+          </span>
+          <span className="min-w-0 flex-1 text-sm leading-snug text-text-primary [overflow-wrap:anywhere]">
+            {rowName}
+          </span>
+          {file ? (
+            <button
+              type="button"
+              aria-label={`Remove ${file.name}`}
+              onClick={() => {
+                onFile(null);
+                // the × is gone: the keyboard goes back to the box
+                box.current?.focus();
+              }}
+              className="flex h-11 w-11 shrink-0 cursor-pointer items-center justify-center rounded-flask-md text-text-muted transition-colors hover:bg-state-hover hover:text-text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus"
+            >
+              <span className={iconFont} aria-hidden>
+                close
+              </span>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       <div
+        ref={box}
         role="button"
         tabIndex={0}
         aria-labelledby="receipt_label"

@@ -625,7 +625,7 @@ describe("Edit Expense (the add card on a saved draft line)", () => {
     expect(description()).toHaveValue("Milk");
     expect(supplier()).toHaveValue("Wellcome");
     expect(account()).toHaveValue("General Expenses");
-    expect(screen.getByText(/milk\.png/)).toBeInTheDocument();
+    expect(screen.getByText('"milk.png" Attached')).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
   });
 
@@ -1101,6 +1101,70 @@ describe("the receipt's preview, as Bills previews an attachment (the user, 2026
     await attach(png("new.png"));
     expect(screen.getByRole("img", { name: "new.png" })).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: "milk.png" })).toBeNull();
+  });
+
+  it("lists a picked receipt in a row with Remove, as Bills lists an uploaded file", async () => {
+    show();
+    await attach(png("taxi.png"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove taxi.png" }));
+
+    expect(screen.queryByText(/^Document preview/)).toBeNull();
+    expect(screen.queryByRole("img", { name: "taxi.png" })).toBeNull();
+    expect(screen.queryByText('"taxi.png" Uploaded')).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
+    expect(screen.getByText("Click to upload or drag and drop")).toBeInTheDocument();
+    // the box, so the keyboard isn't left on a control that is gone
+    expect(screen.getByRole("button", { name: /Receipt\/Document/ })).toHaveFocus();
+  });
+
+  it("takes the read's suggestions with the removed receipt", async () => {
+    api({ suggestions: SUGGESTIONS });
+    show();
+    await attachAndRead(png("taxi.png"));
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+
+    await userEvent.click(screen.getByRole("button", { name: "Remove taxi.png" }));
+
+    expect(amount()).toHaveValue("");
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
+  });
+
+  it("sends nothing on Add once the receipt is removed", async () => {
+    const calls = api(READER_OFF_ANSWER);
+    show({ reader: { enabled: false } });
+    await attach(png("taxi.png"));
+    await userEvent.click(screen.getByRole("button", { name: "Remove taxi.png" }));
+
+    await userEvent.click(screen.getByRole("button", { name: "Add" }));
+
+    expect(calls.adds).toEqual([]);
+  });
+
+  it("Edit Expense never removes the saved receipt; removing a new pick brings it back", async () => {
+    const calls = api(READER_OFF_ANSWER);
+    const props = show({
+      line: {
+        id: "l1",
+        item: "General Expenses",
+        amount: 12,
+        description: "Milk",
+        supplier: SUPPLIERS[0],
+        account: ACCOUNTS[0],
+        receipts: [{ id: "r1", name: "milk.png", mime_type: "image/png" }],
+      },
+    });
+    expect(await screen.findByRole("img", { name: "milk.png" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove/ })).toBeNull();
+
+    await attach(png("new.png"));
+    await userEvent.click(screen.getByRole("button", { name: "Remove new.png" }));
+
+    expect(screen.getByRole("img", { name: "milk.png" })).toBeInTheDocument();
+    expect(screen.getByText('"milk.png" Attached')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(props.onCancel).toHaveBeenCalled(); // nothing changed, so nothing sent
+    expect(calls.edits).toEqual([]);
   });
 
   it("Edit Expense says so when the saved receipt can't be read", async () => {

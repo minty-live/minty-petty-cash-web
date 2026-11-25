@@ -405,6 +405,13 @@ for (const size of [
     await page.keyboard.press("Escape");
     await expect(viewer).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Add New Expense" })).toBeVisible();
+
+    // the row under the pane, as Bills lists an uploaded file: × takes the receipt off
+    await page.getByRole("button", { name: "Remove slip.pdf" }).click();
+    await expect(page.getByText(/^Document preview/)).toHaveCount(0);
+    await expect(page.getByText('"slip.pdf" Uploaded')).toHaveCount(0);
+    await expect(page.getByText("Click to upload or drag and drop")).toBeVisible();
+    await expectNoHorizontalScroll(page);
   });
 }
 
