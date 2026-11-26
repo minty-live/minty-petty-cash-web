@@ -14,13 +14,18 @@ vi.mock("@/lib/apiClient", async (original) => ({
   ...(await original<typeof import("@/lib/apiClient")>()),
   pettyCashFetch: vi.fn(),
 }));
+vi.mock("@/lib/handoff", async (original) => ({
+  ...(await original<typeof import("@/lib/handoff")>()),
+  leaveTo: vi.fn(),
+}));
 vi.mock("@/lib/useAuth", () => ({
   useAuth: () => ({ entityId: "360812e1-9f3a-4c21-8e5b-1a2b3c4d5e6f", entityName: "DB Test Co" }),
 }));
 
 import { Dashboard } from "@/components/dashboard/Dashboard";
 import { ToastProvider } from "@/components/flask/Toasts";
-import { pettyCashFetch } from "@/lib/apiClient";
+import { ApiError, pettyCashFetch } from "@/lib/apiClient";
+import { leaveTo } from "@/lib/handoff";
 import type { Home } from "@/lib/dashboard";
 
 const fetchMock = vi.mocked(pettyCashFetch);
@@ -164,5 +169,119 @@ describe("the catch-up warning", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "02 Oct 2026, submitted" }));
     expect(screen.getByText(WARNING)).toBeInTheDocument();
+  });
+});
+
+// The starting cash (the user, 2026-11-26): onboarding may skip it, so a company's FIRST report asks
+// for the start date and the cash in the box first, saves them (PUT /opening-balance), then goes
+// straight into that day's Opening step. Someone else saving first sends this person to their day.
+describe("the starting cash before the first report", () => {
+  const leave = vi.mocked(leaveTo);
+  const newCompany = (over: Partial<Home> = {}) =>
+    home({
+      latest: { ...home({}).latest, date: null, closing_balance: 0, submitter_first_name: null },
+      published: {},
+      start_date: null,
+      today_has_report: false,
+      today_is_latest_report: false,
+      opening_set: false,
+      ...over,
+    });
+  const startButton = async () => screen.findByRole("button", { name: /Start New Report/ });
+  const dialog = () => screen.queryByRole("dialog", { name: "Set your starting cash" });
+  const amountField = () => screen.getByLabelText(/Cash in your petty cash box on that day/);
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    leave.mockReset();
+  });
+
+  it("asks first when it is not set, with today as the start date", async () => {
+    show(newCompany());
+    fireEvent.click(await startButton());
+
+    expect(dialog()).toBeInTheDocument();
+    expect(screen.getByLabelText("Start date")).toHaveValue("2026-11-03");
+    expect(screen.getByLabelText("Start date")).toHaveAttribute("max", "2026-11-03");
+    expect(amountField()).toHaveAttribute("aria-required", "true");
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Count the cash in your petty cash box at the start of that day and enter it here. Minty tracks every expense and top-up from this amount.",
+    );
+    expect(leave).not.toHaveBeenCalled();
+  });
+
+  it("goes straight to the report when it is set", async () => {
+    show(newCompany({ opening_set: true, start_date: "2026-11-03" }));
+    fireEvent.click(await startButton());
+
+    expect(dialog()).not.toBeInTheDocument();
+    expect(leave).toHaveBeenCalledWith(expect.stringContaining("transaction_date=2026-11-03"));
+  });
+
+  it("saves the date and the amount, then opens that day's Opening step", async () => {
+    show(newCompany());
+    fireEvent.click(await startButton());
+    fetchMock.mockResolvedValueOnce({ start_date: "2026-11-01", opening_balance: 350.5 });
+    fireEvent.change(screen.getByLabelText("Start date"), { target: { value: "2026-11-01" } });
+    fireEvent.change(amountField(), { target: { value: "350.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await vi.waitFor(() => expect(leave).toHaveBeenCalled());
+    expect(fetchMock).toHaveBeenLastCalledWith("/opening-balance", {
+      method: "PUT",
+      json: { start_date: "2026-11-01", opening_balance: 350.5 },
+    });
+    expect(leave).toHaveBeenCalledWith(
+      expect.stringContaining("/reports/new/opening?transaction_date=2026-11-01"),
+    );
+  });
+
+  it("refuses an empty amount - never read as 0 - and saves nothing", async () => {
+    show(newCompany());
+    fireEvent.click(await startButton());
+    const calls = fetchMock.mock.calls.length;
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      screen.getByText(
+        "The cash in your petty cash box is still empty. Add the amount to continue.",
+      ),
+    ).toBeInTheDocument();
+    expect(amountField()).toHaveAttribute("aria-invalid", "true");
+    expect(fetchMock.mock.calls.length).toBe(calls);
+  });
+
+  it("someone else saving first sends this person to the day they saved", async () => {
+    show(newCompany());
+    fireEvent.click(await startButton());
+    fetchMock.mockRejectedValueOnce(
+      new ApiError(409, "The starting cash was just set by someone else.", {
+        code: "OPENING_SET",
+        start_date: "2026-10-30",
+        opening_balance: 100,
+      }),
+    );
+    fireEvent.change(amountField(), { target: { value: "999" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    await vi.waitFor(() =>
+      expect(leave).toHaveBeenCalledWith(expect.stringContaining("transaction_date=2026-10-30")),
+    );
+  });
+
+  it("any other refusal is said in the dialog, which stays open", async () => {
+    show(newCompany());
+    fireEvent.click(await startButton());
+    fetchMock.mockRejectedValueOnce(
+      new ApiError(422, "That amount has more decimal places than HKD allows (2)."),
+    );
+    fireEvent.change(amountField(), { target: { value: "1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Continue" }));
+
+    expect(
+      await screen.findByText("That amount has more decimal places than HKD allows (2)."),
+    ).toBeInTheDocument();
+    expect(dialog()).toBeInTheDocument();
+    expect(leave).not.toHaveBeenCalled();
   });
 });

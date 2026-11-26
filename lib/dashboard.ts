@@ -45,6 +45,11 @@ export type Home = {
   draft_date: string | null;
   /** Onboarding's start date (`entity_pettycash_settings.start_date`): the first report's floor. */
   start_date: string | null;
+  /**
+   * The starting cash is saved (a 0 counts). `false` = not set - onboarding skipped it - and the
+   * first report asks for it first (the user, 2026-11-26). Absent from an older API: never asks.
+   */
+  opening_set?: boolean;
   published: Record<string, PublishedDay>;
   today_has_report: boolean;
   today_is_latest_report: boolean;
@@ -70,6 +75,14 @@ export function isMissing(home: Home, day: string): boolean {
  */
 function onboardingFloor(home: Home): string | null {
   return home.start_date ?? home.draft_date;
+}
+
+/**
+ * Whether Start New Report must first ask for the starting cash (the user, 2026-11-26): it is not
+ * set, and the company has no report and no draft - one already reporting is never asked.
+ */
+export function needsOpening(home: Home): boolean {
+  return home.opening_set === false && !reportSpan(home) && !home.draft && !home.latest.date;
 }
 
 /**

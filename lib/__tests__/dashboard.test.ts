@@ -12,6 +12,7 @@ import {
   firstReportDay,
   isClickable,
   lastEditText,
+  needsOpening,
   NO_CURRENCY,
   PREVIOUS_DAY_FIRST,
   setupMissing,
@@ -354,5 +355,39 @@ describe("the progress steps on a wizard page", () => {
     );
     expect(first).toMatchObject({ state: "current", open: false });
     expect(second).toMatchObject({ state: "locked", open: false });
+  });
+});
+
+// The starting cash (the user, 2026-11-26): onboarding may skip it; then the first report asks.
+describe("the starting cash", () => {
+  it("is asked for when it is not set and the company has no report and no draft", () => {
+    expect(needsOpening(home({ opening_set: false }))).toBe(true);
+  });
+
+  it("is not asked for once it is set (a 0 counts) or when the API does not say", () => {
+    expect(needsOpening(home({ opening_set: true }))).toBe(false);
+    expect(needsOpening(home({}))).toBe(false); // an API before the field: never ask
+  });
+
+  it("is never asked of a company that already reports or has a draft", () => {
+    expect(needsOpening(home({ opening_set: false, published: { "2026-10-13": day() } }))).toBe(
+      false,
+    );
+    expect(
+      needsOpening(
+        home({
+          opening_set: false,
+          draft: {
+            id: "d",
+            current_section: "opening",
+            completed_sections: [],
+            last_edit_seconds: 5,
+          },
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      needsOpening(home({ opening_set: false, latest: { ...home().latest, date: "2026-10-13" } })),
+    ).toBe(false);
   });
 });

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   BeforeYouStartModal,
   DepositModal,
+  OpeningBalanceModal,
   SetupRequiredModal,
   type Confirmation,
 } from "@/components/dashboard/Modals";
@@ -22,6 +23,7 @@ import {
   depositToConfirm,
   firstReportDay,
   lastEditText,
+  needsOpening,
   PREVIOUS_DAY_FIRST,
   previousDayUnfinished,
   reportSpan,
@@ -130,6 +132,9 @@ function DashboardBody({
   } | null>(null);
   const [step, setStep] = useState<"confirm" | "amount">("confirm");
   const [busy, setBusy] = useState(false);
+  // The starting cash, asked before the first report when onboarding skipped it (2026-11-26).
+  const [askingOpening, setAskingOpening] = useState(false);
+  const [openingError, setOpeningError] = useState<string | null>(null);
 
   const code = home.currency_code;
   const setupNeeded = setupMissing(home);
@@ -160,6 +165,11 @@ function DashboardBody({
     const why = startProblem(home, day);
     if (why) {
       toast(why, "warning");
+      return;
+    }
+    if (needsOpening(home)) {
+      setOpeningError(null);
+      setAskingOpening(true);
       return;
     }
     if (!hasReports) return open(day);
@@ -202,6 +212,33 @@ function DashboardBody({
           ? err.message
           : "I couldn't save that deposit correction. Mind trying again?",
         "error",
+      );
+      setBusy(false);
+    }
+  }
+
+  /** Save the starting cash, then go straight into that day's Opening step. Someone who saved it
+   * first wins: this person goes to the day they saved (the Opening step shows their amount). */
+  async function saveOpening(startDate: string, amount: number) {
+    setBusy(true);
+    setOpeningError(null);
+    try {
+      const saved = await pettyCashFetch<{ start_date: string; opening_balance: number }>(
+        "/opening-balance",
+        { method: "PUT", json: { start_date: startDate, opening_balance: amount } },
+      );
+      open(saved.start_date);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 401) return;
+      const body =
+        err instanceof ApiError
+          ? (err.body as { code?: string; start_date?: string } | null)
+          : null;
+      if (body?.code === "OPENING_SET" && body.start_date) return open(body.start_date);
+      setOpeningError(
+        err instanceof ApiError
+          ? err.message
+          : "I couldn't save your starting cash. Mind trying again?",
       );
       setBusy(false);
     }
@@ -251,6 +288,16 @@ function DashboardBody({
           currencyCode={code}
           busy={busy}
           onProceed={proceedAmount}
+        />
+      ) : null}
+      {askingOpening ? (
+        <OpeningBalanceModal
+          today={home.server_today}
+          currencyCode={code}
+          busy={busy}
+          error={openingError}
+          onClose={() => setAskingOpening(false)}
+          onSave={(startDate, amount) => void saveOpening(startDate, amount)}
         />
       ) : null}
       {setupNeeded.length ? (

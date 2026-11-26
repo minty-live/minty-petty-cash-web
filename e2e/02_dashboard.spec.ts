@@ -476,3 +476,52 @@ test("read-only access cannot start a report", async ({ page }) => {
   await expect(start).toBeDisabled();
   await expect(start).toHaveAttribute("title", "Read-only access");
 });
+
+// The starting cash (the user, 2026-11-26): onboarding may skip it, so a company's FIRST report asks
+// for the start date and the cash in the box first, saves them, then opens that day's Opening step.
+test("a company whose starting cash is not set is asked for it before its first report", async ({
+  page,
+}) => {
+  let saved: Json | null = null;
+  await page.route("**/api/petty-cash/v1/companies/*/opening-balance", async (route) => {
+    saved = route.request().postDataJSON() as Json;
+    await route.fulfill({ json: { start_date: "2026-10-12", opening_balance: 420 } });
+  });
+  await enterWith(
+    page,
+    homeAnswer({
+      latest: {
+        ...(homeAnswer().latest as Json),
+        date: null,
+        closing_balance: 0,
+        deposit: 0,
+        deposit_bank_name: "No deposit",
+        deposit_bank_number: "",
+      },
+      published: {},
+      start_date: null,
+      opening_set: false,
+    }),
+  );
+  await page.getByRole("button", { name: "Start New Report" }).click();
+  const dialog = page.getByRole("dialog", { name: "Set your starting cash" });
+  await expect(dialog).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await expect(dialog.getByLabel("Start date")).toHaveValue(TODAY);
+
+  // an empty amount is refused, never read as 0
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(
+    dialog.getByText("The cash in your petty cash box is still empty. Add the amount to continue."),
+  ).toBeVisible();
+  expect(saved).toBeNull();
+
+  await dialog.getByLabel("Start date").fill("2026-10-12");
+  await dialog.getByLabel(/Cash in your petty cash box on that day/).fill("420");
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(page).toHaveURL(
+    (url) =>
+      url.pathname + url.search === `${HOME_PATH}/reports/new/opening?transaction_date=2026-10-12`,
+  );
+  expect(saved).toEqual({ start_date: "2026-10-12", opening_balance: 420 });
+});

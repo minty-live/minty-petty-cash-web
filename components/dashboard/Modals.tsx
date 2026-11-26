@@ -383,6 +383,180 @@ export function DepositModal({
 }
 
 /**
+ * The starting cash, asked before the company's FIRST report when onboarding skipped it (the user,
+ * 2026-11-26): the start date (today by default, never later) and the cash in the petty cash box that
+ * day. An empty amount is refused, never read as 0; a 0 typed on purpose goes through. The caller
+ * saves it (PUT /opening-balance) and opens that day's Opening step; a refusal comes back as `error`.
+ */
+export function OpeningBalanceModal({
+  today,
+  currencyCode,
+  busy,
+  error,
+  onClose,
+  onSave,
+}: {
+  today: string;
+  currencyCode: string | null;
+  busy: boolean;
+  error: string | null;
+  onClose: () => void;
+  onSave: (startDate: string, amount: number) => void;
+}) {
+  const [startDate, setStartDate] = useState(today);
+  const [value, setValue] = useState("");
+  const [emptyRefused, setEmptyRefused] = useState(false);
+  const [dateRefused, setDateRefused] = useState(false);
+  const field = useRef<HTMLInputElement>(null);
+  const dateField = useRef<HTMLInputElement>(null);
+  const amountInput = useAmountInput({
+    value,
+    onValue: (v) => {
+      setValue(v);
+      setEmptyRefused(false);
+    },
+  });
+  const dateId = useId();
+  const fieldId = useId();
+  const messageId = `${fieldId}-message`;
+  const dateMessageId = `${dateId}-message`;
+  const noteId = `${fieldId}-note`;
+  const save = () => {
+    if (busy) return;
+    if (!startDate || startDate > today) {
+      setDateRefused(true);
+      dateField.current?.focus();
+      return;
+    }
+    if (value.trim() === "") {
+      setEmptyRefused(true);
+      field.current?.focus();
+      return;
+    }
+    onSave(startDate, parseMoney(value));
+  };
+  return (
+    <Frame title="Set your starting cash" z="z-50" onClose={busy ? undefined : onClose}>
+      <div className="mb-4 flex items-center justify-between">
+        <h2 className="text-xl font-bold text-flask-gray-900">Set your starting cash</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          disabled={busy}
+          aria-label="Close"
+          className="flex h-11 w-11 items-center justify-center text-flask-gray-400 hover:text-flask-gray-600"
+        >
+          {CLOSE_ICON}
+        </button>
+      </div>
+      <p
+        id={noteId}
+        role="note"
+        className="mb-6 flex items-start gap-2 rounded-flask-xl bg-flask-teal-soft px-4 py-3 text-sm text-flask-secondary-ink"
+      >
+        {NOTE_ICON("mt-0.5 shrink-0")}
+        <span>
+          Count the cash in your petty cash box at the start of that day and enter it here. Minty
+          tracks every expense and top-up from this amount.
+        </span>
+      </p>
+      <form
+        className="space-y-6"
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <div>
+          <label htmlFor={dateId} className="mb-2 block text-sm font-medium text-flask-gray-700">
+            Start date
+          </label>
+          <input
+            ref={dateField}
+            id={dateId}
+            type="date"
+            value={startDate}
+            max={today}
+            onChange={(e) => {
+              setStartDate(e.target.value);
+              setDateRefused(e.target.value > today);
+            }}
+            aria-invalid={dateRefused || undefined}
+            aria-describedby={dateRefused ? dateMessageId : undefined}
+            className={`min-h-11 w-full rounded-flask-2xl border bg-flask-white px-3 py-3 text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
+              dateRefused ? "border-flask-red-500" : "border-flask-gray-300"
+            }`}
+          />
+          {dateRefused ? (
+            <FieldMessage id={dateMessageId}>
+              {startDate
+                ? `The start date can't be after today. Choose ${formatDay(today)} or earlier.`
+                : "The start date is still empty. Choose the day to continue."}
+            </FieldMessage>
+          ) : null}
+        </div>
+        <div>
+          <label htmlFor={fieldId} className="mb-2 block text-sm font-medium text-flask-gray-700">
+            Cash in your petty cash box on that day{" "}
+            <span className="text-flask-red-500" aria-hidden="true">
+              *
+            </span>
+            <span className="sr-only"> (required)</span>
+          </label>
+          <div className="relative">
+            <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
+              <span className="text-sm text-flask-gray-500">{currencyCode}</span>
+            </div>
+            <input
+              ref={field}
+              id={fieldId}
+              autoComplete="off"
+              placeholder="0.00"
+              aria-required="true"
+              aria-invalid={emptyRefused || undefined}
+              aria-describedby={emptyRefused ? messageId : noteId}
+              {...amountInput}
+              className={`w-full rounded-flask-2xl border bg-flask-white py-3 pl-12 pr-3 text-flask-gray-700 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-flask-focus ${
+                emptyRefused ? "border-flask-red-500" : "border-flask-gray-300"
+              }`}
+            />
+          </div>
+          {emptyRefused ? (
+            <FieldMessage id={messageId}>
+              The cash in your petty cash box is still empty. Add the amount to continue.
+            </FieldMessage>
+          ) : null}
+        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-flask-red-600">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex gap-3">
+          <button type="button" onClick={onClose} disabled={busy} className={BACK_BUTTON}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy} className={PROCEED_BUTTON}>
+            {busy ? (
+              <>
+                <span
+                  className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-flask-white border-t-transparent"
+                  aria-hidden="true"
+                />
+                Please wait...
+              </>
+            ) : (
+              "Continue"
+            )}
+          </button>
+        </div>
+      </form>
+    </Frame>
+  );
+}
+
+/**
  * "Setup Required" (Flask's #setupSettingsModal) on minty-web's dialog (owner, 2026-11-17: every question in its
  * design): it cannot be dismissed - the only way on is the settings.
  * `missing` is lib/dashboard.ts `setupMissing`; its currency line links to minty-web's General tab
