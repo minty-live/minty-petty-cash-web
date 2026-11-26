@@ -14,7 +14,7 @@ const inter = Inter({ subsets: ["latin"], display: "swap", variable: "--font-int
 
 export const metadata: Metadata = {
   title: "Petty Cash",
-  description: "Petty Cash - the daily closing, the reports and the cash.",
+  description: "Petty Cash - the day's cash, the expenses and the reports.",
   // A shared link's preview card: the image is app/opengraph-image.png (and twitter-image.png).
   openGraph: { siteName: "Minty", type: "website" },
   twitter: { card: "summary_large_image" },
