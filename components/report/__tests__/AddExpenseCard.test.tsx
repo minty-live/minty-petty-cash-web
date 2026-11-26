@@ -138,11 +138,8 @@ function show(over: Partial<AddExpenseProps> = {}) {
 
 const png = (name = "taxi.png") => new File(["png"], name, { type: "image/png" });
 const attach = (file: File) => userEvent.upload(screen.getByTestId("expense_files"), file);
-/** Picks a receipt and presses "Read receipt" (the only way it is read, owner 2026-11-18). */
-async function attachAndRead(file: File) {
-  await attach(file);
-  await userEvent.click(screen.getByRole("button", { name: "Read receipt" }));
-}
+/** Picks a receipt, which reads it at once (the user, 2026-11-26: no "Read receipt" button). */
+const attachAndRead = attach;
 const amount = () => screen.getByRole("textbox", { name: /Expense Amount/ });
 const description = () => screen.getByRole("textbox", { name: "Description" });
 const supplier = () => screen.getByRole("combobox", { name: /Suppliers/ });
@@ -165,30 +162,30 @@ afterEach(() => resetReaderLatch());
 /** The reader switched off (the API without EXPENSE_AI_ENABLED). */
 const READER_OFF_ANSWER = { suggestions: null, reason: "disabled" };
 
-// Owner, 2026-11-04: a started read that fails says so in one quiet line (it used to say nothing).
-const FAILED = "I couldn't read this receipt. Enter the details yourself.";
+// A started read that fails says why (the user, 2026-11-26; before, one quiet line for every case).
+const FAILED = "Minty couldn't read this receipt. Please try again or fill in the details.";
+const NO_TRIES_LEFT = "Minty couldn't read this receipt. Please fill in the details.";
+const tryAgain = () => screen.queryByRole("button", { name: "Try again" });
 
-describe("the company's AI allowance beside Read receipt", () => {
-  it("shows how much of the allowance is left beside the button", async () => {
+describe("the company's AI allowance", () => {
+  it("says nothing about how much is left while there is room (the user, 2026-11-26)", async () => {
     api({ suggestions: SUGGESTIONS, reason: null });
     show();
     await attach(png());
-    const button = screen.getByRole("button", { name: "Read receipt" });
-    expect(button).toBeEnabled();
-    expect(button).toHaveAccessibleDescription("80% of your AI allowance left");
+    await waitFor(() => expect(amount()).toHaveValue("48.80"));
+    expect(screen.queryByText(/allowance/)).toBeNull();
   });
 
-  it("used up: the button is disabled with the reason beside it, and nothing is read", async () => {
+  it("used up: the receipt is still taken, nothing is read, and the reason shows", async () => {
     const calls = api({ suggestions: SUGGESTIONS, reason: null });
     show({ reader: { ...OPEN, percent_left: 0, blocked: true } });
     await attach(png());
-    const button = screen.getByRole("button", { name: "Read receipt" });
-    expect(button).toBeDisabled();
+    expect(screen.getByText('"taxi.png" Uploaded')).toBeInTheDocument();
     expect(
       screen.getByText("Your company has used its AI allowance. Fill in the details yourself."),
     ).toBeInTheDocument();
-    await userEvent.click(button);
     expect(calls.reads).toHaveLength(0);
+    expect(document.querySelector("video")).toBeNull();
   });
 
   it("hands each read's new allowance to the page, and a used-up answer is not a failure", async () => {
@@ -202,30 +199,36 @@ describe("the company's AI allowance beside Read receipt", () => {
 });
 
 describe("the receipt reader in Add New Expense", () => {
-  // Owner, 2026-11-18: a receipt is read only when the person presses "Read receipt".
-  it("picking a receipt reads nothing; the button offers it, and pressing it reads once", async () => {
+  // The user, 2026-11-26: a receipt is read as soon as it is attached - no "Read receipt" button.
+  it("attaching a receipt reads it once, with no button to press", async () => {
     const calls = api({ suggestions: SUGGESTIONS, reason: null });
     show();
     await attach(png());
-    const button = screen.getByRole("button", { name: "Read receipt" });
-    expect(button).toHaveAttribute("type", "button");
-    expect(calls.reads).toHaveLength(0);
-    expect(amount()).toHaveValue("");
-    await userEvent.click(button);
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(calls.reads).toHaveLength(1);
-    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Read receipt/ })).toBeNull();
   });
 
-  it("no receipt, or the reader switched off on the API, shows no button", async () => {
-    api({ suggestions: SUGGESTIONS, reason: null });
+  it("the same receipt is not read again; a new one is", async () => {
+    const calls = api({ suggestions: SUGGESTIONS, reason: null });
+    show();
+    await attach(png("one.png"));
+    await waitFor(() => expect(calls.reads).toHaveLength(1));
+    await userEvent.type(description(), " more"); // the person works on: nothing reads again
+    expect(calls.reads).toHaveLength(1);
+    await attach(png("two.png"));
+    await waitFor(() => expect(calls.reads).toHaveLength(2));
+  });
+
+  it("the reader switched off on the API reads nothing", async () => {
+    const calls = api({ suggestions: SUGGESTIONS, reason: null });
     show({ reader: { enabled: false } });
-    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
     await attach(png());
-    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
+    expect(screen.getByText('"taxi.png" Uploaded')).toBeInTheDocument();
+    expect(calls.reads).toHaveLength(0);
   });
 
-  it("a failed read brings the button back, and pressing it tries again", async () => {
+  it("a failed read offers Try again in its message, and a try that reads fills the fields", async () => {
     const calls = api(
       { suggestions: null, reason: "timeout" },
       { suggestions: SUGGESTIONS, reason: null },
@@ -233,9 +236,43 @@ describe("the receipt reader in Add New Expense", () => {
     show();
     await attachAndRead(png());
     expect(await screen.findByText(FAILED)).toBeInTheDocument();
-    await userEvent.click(screen.getByRole("button", { name: "Read receipt" }));
+    // the message carries the tries: no second Read receipt beside it
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
+    await userEvent.click(tryAgain()!);
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     expect(calls.reads).toHaveLength(2);
+    expect(screen.queryByText(FAILED)).toBeNull();
+  });
+
+  it("allows two tries, then only Fill in manually (the user, 2026-11-26)", async () => {
+    const calls = api({ suggestions: null, reason: "provider_error" });
+    show();
+    await attachAndRead(png());
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    await userEvent.click(tryAgain()!);
+    await waitFor(() => expect(calls.reads).toHaveLength(2));
+    await userEvent.click(await screen.findByRole("button", { name: "Try again" }));
+    expect(await screen.findByText(NO_TRIES_LEFT)).toBeInTheDocument();
+    expect(calls.reads).toHaveLength(3);
+    expect(tryAgain()).toBeNull();
+    expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
+    // Fill in manually puts the message away and takes the person to the first field
+    await userEvent.click(screen.getByRole("button", { name: "Fill in manually" }));
+    expect(screen.queryByText(NO_TRIES_LEFT)).toBeNull();
+    expect(amount()).toHaveFocus();
+  });
+
+  it.each([
+    [{ reason: "rate_limited" }, "Minty is busy. Please try again in a minute.", true],
+    [{ reason: "file_too_large", max_file_mb: 10 }, "This file is too large (max 10 MB).", false],
+    [{ reason: "no_context" }, "Minty isn't available for this company yet.", false],
+  ])("says why by reason: %o", async (answer, text, retryable) => {
+    api({ suggestions: null, ...answer });
+    show();
+    await attachAndRead(png());
+    expect(await screen.findByText(text)).toBeInTheDocument();
+    expect(tryAgain() !== null).toBe(retryable);
+    expect(screen.getByRole("button", { name: "Fill in manually" })).toBeInTheDocument();
   });
 
   it("fills the empty fields, rings and marks them, and says so once", async () => {
@@ -259,18 +296,43 @@ describe("the receipt reader in Add New Expense", () => {
     ).toBeInTheDocument();
   });
 
-  it("shows Flask's reading box while it reads, and the card stays usable", async () => {
+  it("shows the reading cat while it reads, and the card stays usable", async () => {
+    // the user, 2026-11-26: the large cat in a person's first day of reading (none yet here)
     let answer: (value: unknown) => void = () => undefined;
     api(() => new Promise((resolve) => (answer = resolve)));
     show();
     await attachAndRead(png());
-    expect(await screen.findByText("Reading the receipt…")).toBeInTheDocument();
+    expect(await screen.findByText("Minty is reading your receipt…")).toBeInTheDocument();
+    expect(document.querySelector("video")).not.toBeNull();
+    // the cat takes the drop box's place while it reads (the user, 2026-11-26)
+    expect(screen.queryByText("Click to change files")).toBeNull();
     await userEvent.type(description(), "Taxi");
     answer({ suggestions: SUGGESTIONS, reason: null });
-    await waitFor(() => expect(screen.queryByText("Reading the receipt…")).toBeNull());
+    await waitFor(() => expect(screen.queryByText("Minty is reading your receipt…")).toBeNull());
+    expect(document.querySelector("video")).toBeNull(); // gone the moment the answer arrives
+    expect(screen.getByText("Click to change files")).toBeInTheDocument(); // the box is back
     // typed while it read: never overwritten
     expect(description()).toHaveValue("Taxi");
     expect(amount()).toHaveValue("48.80");
+  });
+
+  it("says only Reading… a day after the person's first read, the cat the same", async () => {
+    api(() => new Promise(() => undefined));
+    const longAgo = new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString();
+    show({ reader: { ...OPEN, first_read_at: longAgo } });
+    await attachAndRead(png());
+    expect(await screen.findByText("Reading…")).toBeInTheDocument();
+    expect(screen.queryByText("Minty is reading your receipt…")).toBeNull();
+    // the same cat takes the box's place (the user, 2026-11-26)
+    expect(screen.queryByText("Click to change files")).toBeNull();
+  });
+
+  it("an error takes the cat away and says why", async () => {
+    api({ suggestions: null, reason: "timeout" });
+    show();
+    await attachAndRead(png());
+    expect(await screen.findByText(FAILED)).toBeInTheDocument();
+    expect(document.querySelector("video")).toBeNull();
   });
 
   it("Clear empties a suggested field; typing in one makes it the person's", async () => {
@@ -436,29 +498,30 @@ describe("the receipt reader in Add New Expense", () => {
     expect(calls.adds).toHaveLength(0);
   });
 
-  it("switched off ('disabled'), it says nothing and is not asked again this session", async () => {
+  it("switched off ('disabled'), it says it isn't available and is not asked again this session", async () => {
+    // the user, 2026-11-26: it used to say nothing
     const calls = api({ suggestions: null, reason: "disabled" });
     show();
     await attachAndRead(png("one.png"));
-    await waitFor(() => expect(calls.reads).toHaveLength(1));
+    expect(
+      await screen.findByText("Minty isn't available for this company yet."),
+    ).toBeInTheDocument();
+    expect(tryAgain()).toBeNull();
     await attach(png("two.png"));
     expect(screen.queryByRole("button", { name: "Read receipt" })).toBeNull();
     expect(calls.reads).toHaveLength(1);
-    expect(screen.queryByText("Reading the receipt…")).toBeNull();
+    expect(screen.queryByText("Minty is reading your receipt…")).toBeNull();
     expect(amount()).toHaveValue("");
     expect(sessionStorage.getItem("minty.pc.receipt-reader")).toBe("off");
-    expect(
-      screen.queryByText("I couldn't read this receipt. Enter the details yourself."),
-    ).toBeNull();
   });
 
-  it("a failed read says so in one quiet line, and nothing else changes", async () => {
+  it("a failed read says why in a polite status, and nothing else changes", async () => {
     const calls = api(() => Promise.reject(new Error("500")));
     show();
     await attachAndRead(png());
     await waitFor(() => expect(calls.reads).toHaveLength(1));
-    expect(await screen.findByText(FAILED)).toHaveAttribute("role", "status");
-    expect(screen.queryByText("Reading the receipt…")).toBeNull();
+    expect((await screen.findByText(FAILED)).closest('[role="status"]')).not.toBeNull();
+    expect(screen.queryByText("Minty is reading your receipt…")).toBeNull();
     expect(document.querySelector("[data-toast-type]")).toBeNull();
     expect(amount()).toHaveValue("");
   });
@@ -537,9 +600,8 @@ describe("the caution under AI-filled fields", () => {
   it("shows under the fields once a read fills them, read with Add, and stays while the person edits", async () => {
     api({ suggestions: SUGGESTIONS, reason: null });
     show();
-    await attach(png());
-    expect(screen.queryByText(CAUTION)).toBeNull(); // picked, not read
-    await userEvent.click(screen.getByRole("button", { name: "Read receipt" }));
+    expect(screen.queryByText(CAUTION)).toBeNull(); // nothing read yet
+    await attach(png()); // attaching reads it (the user, 2026-11-26)
     await waitFor(() => expect(amount()).toHaveValue("48.80"));
     const caution = screen.getByText(CAUTION);
     const add = screen.getByRole("button", { name: "Add" });
@@ -872,13 +934,12 @@ const BANK =
   "This looks like a bank payment confirmation, not a receipt. Check that you've attached the receipt or invoice before you save.";
 
 describe("a wrong or poor receipt is warned about, never refused (the user, 2026-11-24)", () => {
-  it("a photo that looks blurry says so the moment it is picked - no read, no AI", async () => {
-    const seen = api();
+  it("a photo that looks blurry says so the moment it is picked (the free check, not the AI)", async () => {
+    api();
     vi.mocked(photoQuality).mockResolvedValueOnce("blurry");
     show();
     await attach(png("soft.png"));
     expect(await screen.findByText(BLURRY)).toHaveAttribute("role", "status");
-    expect(seen.reads).toHaveLength(0);
     expect(screen.getByRole("button", { name: "Add" })).toBeEnabled();
   });
 
@@ -913,7 +974,10 @@ describe("a wrong or poor receipt is warned about, never refused (the user, 2026
   });
 
   it("a read with no warning shows none, and another receipt takes a warning away", async () => {
-    api({ suggestions: SUGGESTIONS, reason: null, document_warning: "other" });
+    api(
+      { suggestions: SUGGESTIONS, reason: null, document_warning: "other" },
+      { suggestions: SUGGESTIONS, reason: null }, // the next receipt, read on attaching
+    );
     show();
     await attachAndRead(png("cat.png"));
     expect(

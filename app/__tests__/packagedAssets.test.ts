@@ -8,6 +8,7 @@ import { resolve } from "node:path";
 
 import { CONTACT_ASSETS } from "@minty/shared/contact";
 import { PROFILE_ASSETS } from "@minty/shared/profile";
+import { READING_CAT_ASSETS } from "@minty/shared/reader";
 import { SESSION_EXPIRED_ASSETS } from "@minty/shared/sessionExpired";
 import { SIDEBAR_ASSETS } from "@minty/shared/sidebar";
 import { describe, expect, it } from "vitest";
@@ -17,6 +18,7 @@ describe.each([
   ["profile", PROFILE_ASSETS],
   ["contact", CONTACT_ASSETS],
   ["session-expired pop-up", SESSION_EXPIRED_ASSETS],
+  ["reading cat", READING_CAT_ASSETS],
 ])("the packaged %s's assets", (_, assets: readonly string[]) => {
   it("lists some", () => {
     expect(assets.length).toBeGreaterThan(0);

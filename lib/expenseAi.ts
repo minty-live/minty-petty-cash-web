@@ -4,10 +4,9 @@
  * card's state, so the card only draws what this says. Flask's `static/js/expense_ai.js` (the
  * classic page, Minty `351e942`) is the behaviour and the wording being ported:
  *
- *   Offered      a receipt is attached, reader on       -> "Read receipt" (owner, 2026-11-18: never read on attaching),
- *                                                          with the company's AI allowance left beside it; used up ->
- *                                                          the button disabled and the reason beside it
- *   Reading      the person pressed it                  -> "Reading the receipt…"; the card stays usable
+ *   Reading      a receipt is attached, reader on       -> read at once (the user, 2026-11-26: no "Read receipt"
+ *                and the company's allowance not used up    button), the reading cat in the drop zone; the card
+ *                                                          stays usable. Used up: taken, not read, the reason shown
  *   Suggested    a value came back with `applied: true` -> filled in empty fields only, ringed, with
  *                "Amount suggested" ("... suggested — please check" for the medium band) and Clear
  *   Confirmed    the person changes the field          -> the marking goes
@@ -208,17 +207,6 @@ export const CLEAR_LABEL = "Clear the suggested value for this field";
 
 /** The note's button. */
 export const USE_LABEL = "Use the value from the receipt";
-
-/** The press that reads the receipt (owner, 2026-11-18). */
-export const READ_LABEL = "Read receipt";
-
-/** The reading notice (Flask's words). */
-export const READING_TITLE = "Reading the receipt…";
-export const READING_DETAIL =
-  "This can take a few seconds. You can start typing now if you prefer.";
-
-/** The one quiet failure line (owner, 2026-11-04; Part 11: the issue, then the action). */
-export const READ_FAILED = "I couldn't read this receipt. Enter the details yourself.";
 
 /**
  * Several receipts in one file - the only refusal (the user, 2026-11-25): an OK-only question,

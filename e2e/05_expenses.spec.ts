@@ -954,10 +954,10 @@ const SUGGESTIONS = {
 
 const attachReceipt = (page: Page, name = "taxi.png") =>
   page.getByTestId("expense_files").setInputFiles({ name, mimeType: "image/png", buffer: PNG });
-/** "Read receipt": the only way a receipt is read (owner, 2026-11-18). */
+/** The old "Read receipt" press - gone since 2026-11-26 (the user): attaching reads. */
 const readButton = (page: Page) => page.getByRole("button", { name: "Read receipt" });
 
-test("the receipt reader: Flask's reading box, then suggestions in the empty fields, marked - nothing saved until Add", async ({
+test("the receipt reader: the reading cat, then suggestions in the empty fields, marked - nothing saved until Add", async ({
   page,
 }) => {
   let answer: () => void = () => undefined;
@@ -976,15 +976,18 @@ test("the receipt reader: Flask's reading box, then suggestions in the empty fie
     },
   });
   await page.getByRole("button", { name: "Add New Expense" }).click();
+  // the user, 2026-11-26: attaching reads it at once - no "Read receipt" button
   await attachReceipt(page);
-  // picking it reads nothing: the button offers the read
-  await expect(readButton(page)).toBeVisible();
-  expect((await readButton(page).boundingBox())?.height ?? 0).toBeGreaterThanOrEqual(44);
-  expect(reads).toHaveLength(0);
-  await readButton(page).click();
-  const notice = page.getByRole("status").filter({ hasText: "Reading the receipt…" });
+  await expect(readButton(page)).toHaveCount(0);
+  // the reading cat in the drop zone's place, "Minty is reading…" in a person's first day, in a loop
+  const notice = page.getByRole("status").filter({ hasText: "Minty is reading your receipt…" });
   await expect(notice).toBeVisible();
-  await expect(notice).toContainText("You can start typing now if you prefer.");
+  const cat = notice.locator("video");
+  await expect(cat).toHaveAttribute("loop", "");
+  // a real browser plays it: the WebM or the MP4 was loaded and it is running
+  await expect
+    .poll(() => cat.evaluate((v: HTMLVideoElement) => v.readyState >= 2 && !v.paused))
+    .toBe(true);
   // the card stays usable meanwhile
   await page.getByRole("textbox", { name: "Description" }).fill("Taxi");
   answer();
@@ -1042,7 +1045,6 @@ for (const size of [
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page);
     await expect(page.getByText(AI_CAUTION)).toHaveCount(0);
-    await readButton(page).click();
     await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
     const caution = page.getByText(AI_CAUTION);
     await expect(caution).toBeVisible();
@@ -1081,7 +1083,6 @@ for (const size of [
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page);
-    await readButton(page).click();
     const supplier = page.getByRole("combobox", { name: /Suppliers/ });
     await expect(supplier).toHaveValue("Wellcome");
     const line = page.getByText('The receipt reads "惠康 超級市場 Central".', { exact: false });
@@ -1099,16 +1100,13 @@ for (const size of [
   { width: 768, height: 1024 },
   { width: 1440, height: 900 },
 ]) {
-  test(`a tiny photo is called very small the moment it is picked - no AI (${size.width}px)`, async ({
+  test(`a tiny photo is called very small the moment it is picked - the browser's own check (${size.width}px)`, async ({
     page,
   }) => {
     await page.setViewportSize(size);
-    let reads = 0;
     await openWith(page, expensesAnswer(), {
-      onExtract: (_req, route) => {
-        reads += 1;
-        return route.fulfill({ json: { suggestions: null, reason: "timeout" } });
-      },
+      // attaching also reads it (the user, 2026-11-26); the size check is not the AI's
+      onExtract: (_req, route) => route.fulfill({ json: { suggestions: null, reason: "timeout" } }),
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page); // the 1×1 PNG: the real browser check, nothing stood in for
@@ -1116,7 +1114,6 @@ for (const size of [
       "This photo is very small. Check that it can be read, or attach a larger one.",
     );
     await expect(line).toBeVisible();
-    expect(reads).toBe(0);
     await expectNoHorizontalScroll(page);
     await line.scrollIntoViewIfNeeded();
     if (process.env.E2E_SHOTS)
@@ -1139,7 +1136,6 @@ for (const size of [
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page, "transfer.png");
-    await readButton(page).click();
     await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
     const line = page.getByText(
       "This looks like a bank payment confirmation, not a receipt. Check that you've attached the receipt or invoice before you save.",
@@ -1178,7 +1174,6 @@ for (const size of [
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page, "slip.png");
-    await readButton(page).click();
     const amount = page.getByRole("textbox", { name: /Expense Amount/ });
     await expect(amount).toHaveValue("48.80");
     const description = page.getByRole("textbox", { name: "Description" });
@@ -1198,7 +1193,6 @@ for (const size of [
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page, "two.png");
-    await readButton(page).click();
     const dialog = page.getByRole("dialog", { name: "More than one receipt" });
     await expect(dialog).toContainText(
       "This file seems to contain more than one receipt. Please upload one receipt per entry.",
@@ -1222,7 +1216,6 @@ for (const size of [
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page);
-    await readButton(page).click();
     await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
     const supplierLine = page.getByText(
       "The supplier is still empty. Choose a supplier to continue.",
@@ -1289,7 +1282,6 @@ for (const size of [
     });
     await page.getByRole("button", { name: "Add New Expense" }).click();
     await attachReceipt(page);
-    await readButton(page).click();
     const amount = page.getByRole("textbox", { name: /Expense Amount/ });
     await expect(amount).toHaveValue("96.82");
     expect(read).toContain('name="transaction_date"');
@@ -1345,7 +1337,6 @@ test("the reader offers a different reading and an unknown supplier, and changes
   const amount = page.getByRole("textbox", { name: /Expense Amount/ });
   await amount.fill("45");
   await attachReceipt(page);
-  await readButton(page).click();
   await expect(page.getByText(/^The receipt reads HKD.48\.80, not HKD.45\.00\.$/)).toBeVisible();
   await page.getByRole("button", { name: "Use the value from the receipt" }).click();
   await expect(amount).toHaveValue("48.80");
@@ -1389,9 +1380,8 @@ test("a reader switched off since the page loaded says nothing and is not offere
   });
   await page.getByRole("button", { name: "Add New Expense" }).click();
   await attachReceipt(page, "one.png");
-  await readButton(page).click();
   await expect.poll(() => reads).toBe(1);
-  await expect(page.getByText("Reading the receipt…")).toHaveCount(0);
+  await expect(page.getByText("Minty is reading your receipt…")).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("");
   await attachReceipt(page, "two.png");
   await expect(page.getByText('"two.png" Uploaded')).toBeVisible();
@@ -1399,8 +1389,9 @@ test("a reader switched off since the page loaded says nothing and is not offere
   expect(reads).toBe(1);
 });
 
-// Owner, 2026-11-04: a started read that fails says so in one quiet line (it used to say nothing).
-test("a reader that fails says so in one quiet line, offers the press again, and Add still works", async ({
+// A started read that fails says why, with Try again twice and Fill in manually (the user,
+// 2026-11-26; before, one quiet line for every case).
+test("a reader that fails says why, offers Try again in its message, and Add still works", async ({
   page,
 }) => {
   await openWith(page, expensesAnswer(), {
@@ -1408,13 +1399,13 @@ test("a reader that fails says so in one quiet line, offers the press again, and
       route.fulfill({ status: 500, json: { error: "Something went wrong on our side." } }),
   });
   await fillAdd(page);
-  await readButton(page).click();
-  await expect(page.getByText("Reading the receipt…")).toHaveCount(0);
+  await expect(page.getByText("Minty is reading your receipt…")).toHaveCount(0);
   await expect(
-    page.getByText("I couldn't read this receipt. Enter the details yourself."),
+    page.getByText("Minty couldn't read this receipt. Please try again or fill in the details."),
   ).toBeVisible();
-  // the press comes back to try again
-  await expect(readButton(page)).toBeVisible();
+  // the message carries the tries; the Read receipt press does not come back
+  await expect(page.getByRole("button", { name: "Try again" })).toBeVisible();
+  await expect(readButton(page)).toHaveCount(0);
   await expect(page.locator("[data-toast-type]")).toHaveCount(0);
   await page.getByRole("button", { name: "Add", exact: true }).click();
   await expect(toast(page, "Expense added successfully!")).toBeVisible();
@@ -1436,7 +1427,7 @@ test("the page reloads with no console error", async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test("Read receipt shows the company's AI allowance left, and once it is used up it is disabled with the reason", async ({
+test("the company's AI allowance: nothing shown while there is room; used up, a receipt is taken but not read, with the reason", async ({
   page,
 }) => {
   const reads: string[] = [];
@@ -1462,23 +1453,21 @@ test("Read receipt shows the company's AI allowance left, and once it is used up
     },
   });
   await page.getByRole("button", { name: "Add New Expense" }).click();
+  // attaching reads it (the user, 2026-11-26), and nothing says how much is left
   await attachReceipt(page);
-  await expect(readButton(page)).toBeEnabled();
-  await expect(readButton(page)).toHaveAccessibleDescription("80% of your AI allowance left");
+  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
+  await expect(page.getByText(/AI allowance left/)).toHaveCount(0);
   await page.screenshot({
     path: `test-results/ai-reads-left-${page.viewportSize()?.width}.png`,
     fullPage: true,
   });
-
-  await readButton(page).click();
-  await expect(page.getByRole("textbox", { name: /Expense Amount/ })).toHaveValue("48.80");
-  // the read used the last one: the count stays, saying why there are no more
+  // the read used the last one: the reason shows
   const usedUp = "Your company has used its AI allowance. Fill in the details yourself.";
   await expect(page.getByText(usedUp)).toBeVisible();
-  // a new receipt offers the button again, disabled, its reason beside it
+  // a new receipt is taken, not read, the reason still beside it
   await attachReceipt(page, "second.png");
-  await expect(readButton(page)).toBeDisabled();
-  await expect(readButton(page)).toHaveAccessibleDescription(usedUp);
+  await expect(page.getByText('"second.png" Uploaded')).toBeVisible();
+  await expect(page.getByText(usedUp)).toBeVisible();
   expect(reads).toHaveLength(1);
   await page.screenshot({
     path: `test-results/ai-reads-used-up-${page.viewportSize()?.width}.png`,

@@ -3,39 +3,38 @@
 /**
  * The receipt reader in Add New Expense, drawn as Flask's classic page drew it
  * (`static/js/expense_ai.js`, Minty `351e942`): the read itself (`POST /reports/expenses/extract`)
- * and the pieces the card draws around its fields - the teal "Reading the receipt…" box under the
- * drop zone, the line under a suggested field with Clear, the grey note offering the receipt's
- * different reading, (owner, 2026-11-04) one quiet line when a started read fails, and (owner,
- * 2026-11-18) the "Read receipt" press - a receipt is read only on it, never on picking it - with the
- * company's AI allowance left beside it (shared with Payment Request). The rules
- * are lib/expenseAi.ts; the read and the pieces are `@minty/shared/reader`, shared with Payment
- * Request's invoice reader, here with this card's words.
+ * and the pieces the card draws around its fields. The user, 2026-11-26: a receipt is read as soon
+ * as it is attached (no "Read receipt" press, which the owner had asked for on 2026-11-18), with the
+ * reading cat in the drop zone's place; a failed read says why, with Try again (twice) and Fill in
+ * manually; nothing about how much allowance is left, only the reason once it is used up (the
+ * receipt is then taken but not read). Also the line under a suggested field with Clear and the
+ * grey note offering the receipt's different reading. The rules are lib/expenseAi.ts; the read and
+ * the pieces are `@minty/shared/reader`, shared with Payment Request's invoice reader, here with
+ * this card's words.
  *
- * Switched off is silent (a `disabled` answer switches the reader off for the session). The API
- * logs its own failures.
+ * Switched off says "Minty isn't available for this company yet." once, then nothing is read for
+ * the session (a `disabled` answer latches the reader off). The API logs its own failures.
  */
 
 import {
   AllowanceNote,
   PLEASE_CHECK,
-  ReadButton,
   ReaderNote,
-  ReadFailedLine,
-  ReadingNotice as SharedReadingNotice,
+  ReadFailedNotice,
+  readFailureText,
+  ReadingCat,
+  readingCatSize,
   SuggestedLine as SharedSuggestedLine,
   useDocumentReader,
   type DocumentWarning,
   type EvidenceRefusal,
+  type ReadFailure,
   type ReaderStatus,
 } from "@minty/shared/reader";
 
 import { pettyCashFetch } from "@/lib/apiClient";
 import {
   CLEAR_LABEL,
-  READ_FAILED,
-  READ_LABEL,
-  READING_DETAIL,
-  READING_TITLE,
   RECEIPT_LATCH,
   suggestedText,
   USE_LABEL,
@@ -89,43 +88,46 @@ export function useReceiptReader(
 const ALLOWANCE_ID = "expense_ai_allowance";
 
 /**
- * "Read receipt": the only way a receipt is read (shown once one is picked and the reader is on),
- * with the company's AI allowance left beside it ("80% of your AI allowance left"; it stays after the read). Used up: disabled, the reason
- * beside it (a gated button shows its reason).
+ * A receipt is read as soon as it is attached (the user, 2026-11-26: no "Read receipt" button, no
+ * "% of your AI allowance left"). Once the company's allowance is used up the receipt is still
+ * taken but not read, and this says why ("Your company has used its AI allowance…", or "AI
+ * reading is paused until {date}…"); otherwise it draws nothing.
  */
-export function ReadReceiptButton({
-  onRead,
-  status,
-  offer,
+export function ReaderBlockedNote({ status }: { status: ReaderStatus | null }) {
+  return <AllowanceNote id={ALLOWANCE_ID} status={status} />;
+}
+
+/**
+ * While the receipt is read: the reading cat in the receipt box's place (the user, 2026-11-26;
+ * `ReceiptDrop`'s `busy`) - the same cat for everyone, "Minty is reading your receipt…" in the
+ * person's first day of reading, "Reading…" after.
+ */
+export function ReadingInBox({ status }: { status: ReaderStatus | null }) {
+  return <ReadingCat size={readingCatSize(status)} document="receipt" place="zone" />;
+}
+
+/**
+ * Why a started read came back with nothing (the user, 2026-11-26), with Try again while the
+ * receipt has tries left and Fill in manually.
+ */
+export function ReadFailed({
+  failure,
+  canRetry,
+  onRetry,
+  onManual,
 }: {
-  onRead: () => void;
-  status: ReaderStatus | null;
-  /** The button itself (it goes once pressed, until a read fails); the count stays. */
-  offer: boolean;
+  failure: ReadFailure;
+  canRetry: boolean;
+  onRetry: () => void;
+  onManual: () => void;
 }) {
   return (
-    <div>
-      {offer ? (
-        <ReadButton
-          label={READ_LABEL}
-          onClick={onRead}
-          disabled={!!status?.blocked}
-          describedBy={ALLOWANCE_ID}
-        />
-      ) : null}
-      <AllowanceNote id={ALLOWANCE_ID} status={status} />
-    </div>
+    <ReadFailedNotice
+      text={readFailureText(failure, "receipt", canRetry)}
+      onRetry={canRetry ? onRetry : undefined}
+      onManual={onManual}
+    />
   );
-}
-
-/** While the receipt is read: Flask's teal box (QA found 12px grey text was missed; the wait is seconds). */
-export function ReadingNotice() {
-  return <SharedReadingNotice title={READING_TITLE} detail={READING_DETAIL} />;
-}
-
-/** The one quiet line when a started read came back with nothing. */
-export function ReadFailed() {
-  return <ReadFailedLine text={READ_FAILED} />;
 }
 
 /**

@@ -13,14 +13,14 @@ import {
 } from "react";
 
 import { useAmountInput } from "@minty/shared/amountInput";
-import { outlineOf } from "@minty/shared/reader";
+import { canRead, outlineOf } from "@minty/shared/reader";
 
 import { useToast } from "@/components/flask/Toasts";
 import {
   outlineRing,
   ReadFailed,
-  ReadingNotice,
-  ReadReceiptButton,
+  ReaderBlockedNote,
+  ReadingInBox,
   ReceiptNote,
   SuggestedLine,
   useReceiptReader,
@@ -154,7 +154,7 @@ export type AddExpenseProps = {
   canCreateSupplier: boolean;
   /**
    * The receipt reader's status (the page's `reader`, then each read's): switched on, a picked
-   * receipt offers "Read receipt" with the company's AI allowance left; used up, the button is disabled.
+   * receipt offers "Read receipt"; used up, the button is disabled with the reason (no count shown).
    */
   reader: ReaderStatus | null;
   /** A read's answer carried the company's new allowance: the page keeps it for every card. */
@@ -332,15 +332,6 @@ export function AddExpenseCard(props: AddExpenseProps) {
     };
   }, [file]);
   const photoFinding = photoCheck && photoCheck.file === file ? photoCheck.finding : null;
-  // "Read receipt" was pressed for this receipt: the button goes, and comes back after a failed read
-  const [readAsked, setReadAsked] = useState(false);
-  // (and never once a `disabled` answer has switched the reader off for the session)
-  const offerRead =
-    readerStatus?.enabled === true &&
-    file !== null &&
-    !reader.reading &&
-    (!readAsked || reader.failed) &&
-    !readerOff();
   // input not saved yet: a saved line's fields changed or a new receipt; a new line's anything typed
   const holdsInput =
     file !== null ||
@@ -661,6 +652,8 @@ export function AddExpenseCard(props: AddExpenseProps) {
             : null
         }
         invalid={errors.has("file")}
+        // the reading cat in the box's place while it reads (the user, 2026-11-26)
+        busy={reader.reading ? <ReadingInBox status={readerStatus} /> : null}
         onRemoveKept={() => setSavedRemoved(true)}
         onFile={(f) => {
           revoke(pickedRef.current);
@@ -674,31 +667,35 @@ export function AddExpenseCard(props: AddExpenseProps) {
           setRateMissing(null);
           setRefused(null);
           setDocumentWarning(null);
-          // read only on "Read receipt" (owner, 2026-11-18)
           reader.cancel();
-          setReadAsked(false);
           if (f) clearError("file");
+          // a new receipt is read at once (the user, 2026-11-26: no "Read receipt" button) - unless
+          // the company's AI allowance is used up or the reader is off for the session; the same
+          // receipt is never read again (Try again in a failure's message is the person's own)
+          if (f && canRead(readerStatus) && !readerOff()) void reader.read(f);
         }}
       >
-        {reader.reading ? <ReadingNotice /> : null}
-        {reader.failed && !reader.reading ? <ReadFailed /> : null}
+        {reader.failure && !reader.reading ? (
+          <ReadFailed
+            failure={reader.failure}
+            canRetry={reader.canRetry}
+            onRetry={() => {
+              setRefused(null);
+              setDocumentWarning(null);
+              void reader.retry();
+            }}
+            onManual={() => {
+              reader.dismiss();
+              card.current?.querySelector<HTMLInputElement>("#expense_amount")?.focus();
+            }}
+          />
+        ) : null}
         {photoFinding ? <ReadFailedLine text={photoQualityText(photoFinding)} /> : null}
         {documentWarning && !reader.reading ? (
           // the more specific word on a refused read too: "a bank payment confirmation"
           <ReadFailedLine text={documentWarningText(documentWarning, "receipt")} />
         ) : null}
-        {readerStatus?.enabled === true && file !== null && !readerOff() ? (
-          <ReadReceiptButton
-            status={readerStatus}
-            offer={offerRead}
-            onRead={() => {
-              setRefused(null);
-              setDocumentWarning(null);
-              setReadAsked(true);
-              void reader.read(file);
-            }}
-          />
-        ) : null}
+        {file !== null && !readerOff() ? <ReaderBlockedNote status={readerStatus} /> : null}
       </ReceiptDrop>
       <div role="status" aria-live="polite" className="sr-only">
         {entry.announcement}
@@ -1192,8 +1189,14 @@ function ReceiptDrop({
   invalid,
   onRemoveKept,
   onFile,
+  busy = null,
   children,
 }: {
+  /**
+   * Drawn in the box's place while set - the large reading cat (the user, 2026-11-26); the box,
+   * and picking or dropping a file, come back when it goes.
+   */
+  busy?: ReactNode;
   picked: Picked | null;
   /** Edit Expense: the saved receipt's name, shown until another file is picked. */
   kept?: string | null;
@@ -1240,6 +1243,21 @@ function ReceiptDrop({
 
   const isFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
 
+  const picker = (
+    <input
+      ref={input}
+      type="file"
+      className="hidden"
+      accept={RECEIPT_ACCEPT}
+      data-testid="expense_files"
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => {
+        take(Array.from(e.target.files ?? []), "picked");
+        e.target.value = "";
+      }}
+    />
+  );
+
   let look: string;
   if (dragging) look = "border-2 border-dashed border-flask-blue-500 bg-flask-blue-50 p-6";
   else if (file || kept)
@@ -1268,95 +1286,92 @@ function ReceiptDrop({
       {rowName ? (
         <ReceiptRow name={rowName} onRemove={file || onRemoveKept ? remove : undefined} />
       ) : null}
-      <div
-        ref={box}
-        role="button"
-        tabIndex={0}
-        aria-labelledby="receipt_label"
-        aria-describedby={invalid ? "receipt_hint expense_file_missing" : "receipt_hint"}
-        onClick={() => input.current?.click()}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            input.current?.click();
-          }
-        }}
-        onDragEnter={(e) => {
-          e.preventDefault();
-          if (isFiles(e)) setDragging(true);
-        }}
-        onDragOver={(e) => {
-          e.preventDefault();
-          if (isFiles(e)) {
-            setDragging(true);
-            e.dataTransfer.dropEffect = "copy";
-          }
-        }}
-        onDragLeave={(e) => {
-          e.preventDefault();
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          setDragging(false);
-          take(Array.from(e.dataTransfer.files), "dropped");
-        }}
-        className={`relative cursor-pointer overflow-hidden rounded-flask-md text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus ${look}`}
-      >
-        <svg
-          className={`mx-auto mb-4 h-12 w-12 ${(file || kept) && !dragging ? "text-flask-upload-ok" : "text-flask-gray-400"}`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          aria-hidden="true"
-        >
-          {(file || kept) && !dragging ? (
-            <path strokeLinecap="round" strokeLinejoin="round" d={DONE_ICON} />
-          ) : (
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={UPLOAD_ICON} />
-          )}
-        </svg>
-        {file && !dragging ? (
-          <>
-            <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
-              &quot;{uploadName(file.name)}&quot; Uploaded
-            </p>
-            <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-              Click to change files
-            </p>
-          </>
-        ) : kept && !dragging ? (
-          <>
-            <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
-              &quot;{uploadName(kept)}&quot; Attached
-            </p>
-            <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-              Click to change files
-            </p>
-          </>
-        ) : (
-          <>
-            <p className="text-sm font-medium text-flask-gray-700">
-              Click to upload or drag and drop
-            </p>
-            <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
-              PDF, JPEG, PNG, HEIC (Max 10MB)
-            </p>
-          </>
-        )}
-        <input
-          ref={input}
-          type="file"
-          className="hidden"
-          accept={RECEIPT_ACCEPT}
-          data-testid="expense_files"
-          onClick={(e) => e.stopPropagation()}
-          onChange={(e) => {
-            take(Array.from(e.target.files ?? []), "picked");
-            e.target.value = "";
+      {busy ? (
+        <>
+          {busy}
+          {/* the picker stays in the page (tests reach it by its id); nothing opens it meanwhile */}
+          {picker}
+        </>
+      ) : (
+        <div
+          ref={box}
+          role="button"
+          tabIndex={0}
+          aria-labelledby="receipt_label"
+          aria-describedby={invalid ? "receipt_hint expense_file_missing" : "receipt_hint"}
+          onClick={() => input.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              input.current?.click();
+            }
           }}
-        />
-      </div>
+          onDragEnter={(e) => {
+            e.preventDefault();
+            if (isFiles(e)) setDragging(true);
+          }}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (isFiles(e)) {
+              setDragging(true);
+              e.dataTransfer.dropEffect = "copy";
+            }
+          }}
+          onDragLeave={(e) => {
+            e.preventDefault();
+            if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            take(Array.from(e.dataTransfer.files), "dropped");
+          }}
+          className={`relative cursor-pointer overflow-hidden rounded-flask-md text-center transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus ${look}`}
+        >
+          <svg
+            className={`mx-auto mb-4 h-12 w-12 ${(file || kept) && !dragging ? "text-flask-upload-ok" : "text-flask-gray-400"}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            {(file || kept) && !dragging ? (
+              <path strokeLinecap="round" strokeLinejoin="round" d={DONE_ICON} />
+            ) : (
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d={UPLOAD_ICON} />
+            )}
+          </svg>
+          {file && !dragging ? (
+            <>
+              <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
+                &quot;{uploadName(file.name)}&quot; Uploaded
+              </p>
+              <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
+                Click to change files
+              </p>
+            </>
+          ) : kept && !dragging ? (
+            <>
+              <p className="text-sm font-medium text-flask-upload-ok [overflow-wrap:anywhere]">
+                &quot;{uploadName(kept)}&quot; Attached
+              </p>
+              <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
+                Click to change files
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-medium text-flask-gray-700">
+                Click to upload or drag and drop
+              </p>
+              <p id="receipt_hint" className="mt-1 text-xs text-flask-gray-500">
+                PDF, JPEG, PNG, HEIC (Max 10MB)
+              </p>
+            </>
+          )}
+          {picker}
+        </div>
+      )}
       {invalid ? <FieldMessage id="expense_file_missing">{RECEIPT_MISSING}</FieldMessage> : null}
       {children}
       {/* on the live object URL: replacing the file revokes it and unmounts this in one commit */}
