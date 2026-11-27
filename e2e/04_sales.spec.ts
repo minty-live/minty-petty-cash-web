@@ -41,7 +41,6 @@ function salesAnswer(over: Json = {}): Json {
       method("foodpanda_sales", "Food Panda", "delivery"),
       method("wechat_sales", "WeChat Pay", "electronic"),
       method("openrice_sales", "OpenRice", "delivery"),
-      method("deliveroo_sales", "Deliveroo", "delivery"),
     ],
     cash_sales: null,
     ...over,
@@ -156,7 +155,7 @@ test("Flask's sections, its labels and its order", async ({ page }) => {
   for (const heading of ["Electronic Payments", "Delivery Sales", "Cash Sales"]) {
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
   }
-  // Flask title-cases the names: "Wechat Pay", "Openrice"; Deliveroo is not listed
+  // Flask title-cases the names: "Wechat Pay", "Openrice"
   const labels = await page.locator("label").allTextContents();
   expect(labels).toEqual(["Visa", "Wechat Pay", "Food Panda", "Openrice"]);
   await expect(page.getByRole("textbox", { name: "Cash Sales" })).toHaveAttribute(

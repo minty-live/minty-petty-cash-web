@@ -51,10 +51,6 @@ export function partsOf(page: Pick<SalesPage, "parts" | "groups">): SalesParts {
   return page.parts ?? { ...EVERY_PART, delivery: page.groups !== "non_cash" };
 }
 
-/** The method the save has always skipped, so it is never offered (Flask's Ending left it out of both
- * lists; its Sales page only out of delivery, and dropped what was typed there). */
-const SKIPPED = "deliveroo_sales";
-
 /**
  * A method's label exactly as Flask's template writes it: Python's `str.title()` of the name, so
  * "WeChat Pay" shows as "Wechat Pay" and "OpenRice" as "Openrice". Every run of letters gets a
@@ -67,7 +63,7 @@ export function flaskLabel(name: string): string {
     .replace(/[A-Za-z]+/g, (word) => word[0].toUpperCase() + word.slice(1).toLowerCase());
 }
 
-/** The methods each section lists, in order (Deliveroo left out of both, as Flask's Ending does).
+/** The methods each section lists, in order.
  * A Non-cash company has one section, `electronic`, holding every method - delivery ones included. */
 export function sections<M extends Pick<SalesMethod, "type" | "value_name">>(
   methods: M[],
@@ -77,7 +73,7 @@ export function sections<M extends Pick<SalesMethod, "type" | "value_name">>(
   electronic: M[];
   delivery: M[];
 } {
-  const kept = methods.filter((m) => m.value_name !== SKIPPED);
+  const kept = methods;
   // A Non-cash company without a Delivery part keeps every method in its one section; one that
   // ticked Delivery (2026-11-17) gets its delivery methods in their own part.
   if (groups === "non_cash" && !parts.delivery) {

@@ -33,18 +33,18 @@ describe("the sections and their totals", () => {
     method("alipay_sales", "electronic"),
   ];
 
-  it("leave Deliveroo out even when it is set up as an electronic method", () => {
+  it("list a company's own Deliveroo like any other method (Minty's row is gone, 2026-11-27)", () => {
     const { electronic } = sections([
       method("deliveroo_sales", "electronic"),
       method("visa_sales", "electronic"),
     ]);
-    expect(electronic.map((m) => m.value_name)).toEqual(["visa_sales"]);
+    expect(electronic.map((m) => m.value_name)).toEqual(["deliveroo_sales", "visa_sales"]);
   });
 
-  it("keep Settings order and leave Deliveroo out of delivery", () => {
+  it("keep Settings order", () => {
     const { electronic, delivery } = sections(methods);
     expect(electronic.map((m) => m.value_name)).toEqual(["visa_sales", "alipay_sales"]);
-    expect(delivery.map((m) => m.value_name)).toEqual(["foodpanda_sales"]);
+    expect(delivery.map((m) => m.value_name)).toEqual(["foodpanda_sales", "deliveroo_sales"]);
   });
 
   it("add up what the fields show, commas and empties included", () => {
@@ -59,7 +59,7 @@ describe("the sections and their totals", () => {
         },
         "1,000.00",
       ),
-    ).toEqual({ electronic: 1200.5, delivery: 33.25, cash: 1000 });
+    ).toEqual({ electronic: 1200.5, delivery: 42.25, cash: 1000 });
   });
 });
 
@@ -71,11 +71,12 @@ describe("a Non-cash company (owner, 2026-11-11: retail, service, general)", () 
     method("fps_sales", "electronic"),
   ];
 
-  it("lists every method in one Non-cash section, Settings order, Deliveroo still left out", () => {
+  it("lists every method in one Non-cash section, Settings order", () => {
     const { electronic, delivery } = sections(methods, "non_cash");
     expect(electronic.map((m) => m.value_name)).toEqual([
       "visa_sales",
       "foodpanda_sales",
+      "deliveroo_sales",
       "fps_sales",
     ]);
     expect(delivery).toEqual([]);
@@ -95,8 +96,9 @@ describe("a Non-cash company (owner, 2026-11-11: retail, service, general)", () 
   it("Electronic and Delivery stay apart for Restaurant & Food and an older company", () => {
     expect(sections(methods, "electronic_delivery").delivery.map((m) => m.value_name)).toEqual([
       "foodpanda_sales",
+      "deliveroo_sales",
     ]);
-    expect(sections(methods).delivery).toHaveLength(1);
+    expect(sections(methods).delivery).toHaveLength(2);
   });
 });
 

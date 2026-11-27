@@ -250,7 +250,7 @@ What it keeps from Flask:
 
 - **The report header and the stepper**, as on Opening, with the same unsaved-changes hold. Emptying a field does not count as a change, as in Flask.
 - **"Sales Entry"**, then one card:
-  - **Electronic Payments** and **Delivery Sales**: a field per method the company switched on, two to a row, in Settings order. Deliveroo is left out of delivery.
+  - **Electronic Payments** and **Delivery Sales**: a field per method the company switched on, two to a row, in Settings order.
   - **Cash Sales**: one full-width field with no label.
   - each section ends in its running total ("Total Electronic Payment Sales", "Total Delivery Sales", "Total Cash Sales").
   - **A Non-cash company (owner, 2026-11-11):** when the API's `groups` is `non_cash` (a retail shop, a service or a general business - onboarding's step 5 asks the same), Electronic and Delivery become one **Non-cash Sales** section (titled **Electronic**, after its sales account, since 2026-11-17 - owner: Cash, Electronic and Delivery) holding every method, delivery ones included, with "Total Non-cash Sales"; then Cash Sales. Restaurant & Food and a company from before onboarding asked (`electronic_delivery`, or no `groups`) keep both sections (`lib/sales.ts` `sections`/`salesTotals`).
