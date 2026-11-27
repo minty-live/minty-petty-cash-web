@@ -61,7 +61,7 @@ export function SharedReportView({ segments }: { segments: string[] }) {
   const refused = !parts ? SHARE_REFUSED.gone : read && "refused" in read ? read.refused : null;
   if (!report) {
     return (
-      <PhoneCard publicView acronym="" datePill="">
+      <PhoneCard publicView company="" datePill="">
         {refused ? (
           <p role="alert" className="mt-10 text-center text-sm text-flask-gray-700">
             {refused}
@@ -78,7 +78,7 @@ export function SharedReportView({ segments }: { segments: string[] }) {
   return (
     <PhoneCard
       publicView
-      acronym={report.companyName}
+      company={report.companyName}
       datePill={datePill(report.day)}
       badge={<ReportBadge draft={sharedBadge(report.statusTone, report.statusLabel)} />}
     >

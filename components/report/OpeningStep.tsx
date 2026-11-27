@@ -19,7 +19,6 @@ import {
   LoadingOverlay,
   ReportBadge,
 } from "@/components/report/ReportChrome";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome } from "@/lib/companyPages";
 import { parseMoney } from "@/lib/currencyInput";
@@ -72,10 +71,10 @@ export function OpeningStep({ day }: { day: string | null }) {
     };
   }, [day, toast, reads]);
 
-  const acronym = entityAcronym(auth?.entityName);
+  const companyName = auth?.entityName ?? "";
   if (!page || !auth) {
     return (
-      <PhoneCard acronym={acronym} datePill="">
+      <PhoneCard company={companyName} datePill="">
         {!failed ? (
           <p className="text-sm text-flask-gray-500" role="status">
             Loading…
@@ -91,7 +90,7 @@ export function OpeningStep({ day }: { day: string | null }) {
       onReload={reload}
       entityId={auth.entityId}
       entityName={auth.entityName}
-      acronym={acronym}
+      companyName={companyName}
     />
   );
 }
@@ -101,13 +100,13 @@ function OpeningForm({
   onReload,
   entityId,
   entityName,
-  acronym,
+  companyName,
 }: {
   page: OpeningPage;
   onReload: () => void;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
 }) {
   const toast = useToast();
   const router = useRouter();
@@ -238,7 +237,7 @@ function OpeningForm({
 
   return (
     <PhoneCard
-      acronym={acronym}
+      company={companyName}
       datePill={datePill(day)}
       badge={<ReportBadge draft={page.draft} />}
       backHref={home}

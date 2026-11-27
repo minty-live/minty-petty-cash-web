@@ -108,18 +108,18 @@ describe("My Profile in Petty Cash", () => {
     expect(urls.some((u) => u.pathname.startsWith("/handoff/"))).toBe(false);
   });
 
-  it("Flask's header initials open the same sheet - a button now, not a link to minty-web's page", async () => {
+  it("the header's initials open the same sheet - a button now, not a link to minty-web's page", async () => {
     render(
       <ToastProvider>
         <SidebarShell>
-          <PhoneCard acronym="OV" backHref="/entities">
+          <PhoneCard company="Olive & Vine" backHref="/entities">
             <p>The dashboard</p>
           </PhoneCard>
         </SidebarShell>
       </ToastProvider>,
     );
-    expect(screen.queryByRole("link", { name: "My Profile" })).toBeNull();
-    const initials = await screen.findByRole("button", { name: "My Profile" });
+    expect(screen.queryByRole("link", { name: /My Profile/ })).toBeNull();
+    const initials = await screen.findByRole("button", { name: /My Profile/ });
     await waitFor(() => expect(initials).toHaveTextContent("JB"));
     await userEvent.click(initials);
 
@@ -134,7 +134,7 @@ describe("My Profile in Petty Cash", () => {
   it("without a sidebar the initials link to the entity list, and say so - not My Profile", async () => {
     render(
       <ToastProvider>
-        <PhoneCard acronym="OV" backHref="/entities">
+        <PhoneCard company="Olive & Vine" backHref="/entities">
           <p>The dashboard</p>
         </PhoneCard>
       </ToastProvider>,

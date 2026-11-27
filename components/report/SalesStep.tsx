@@ -13,7 +13,6 @@ import { useAlreadySaved } from "@/components/report/AlreadySavedDialog";
 import { LoadingOverlay, ReportBadge } from "@/components/report/ReportChrome";
 import { reportVersion, useStepDraft } from "@/components/report/StepDraft";
 import { useStepLeave } from "@/components/report/StepLeave";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome } from "@/lib/companyPages";
 import { parseMoney } from "@/lib/currencyInput";
@@ -66,10 +65,10 @@ export function SalesStep({ day }: { day: string | null }) {
     };
   }, [day, toast]);
 
-  const acronym = entityAcronym(auth?.entityName);
+  const companyName = auth?.entityName ?? "";
   if (!page || !auth) {
     return (
-      <PhoneCard acronym={acronym} datePill="">
+      <PhoneCard company={companyName} datePill="">
         {!failed ? (
           <p className="text-sm text-flask-gray-500" role="status">
             Loading…
@@ -83,7 +82,7 @@ export function SalesStep({ day }: { day: string | null }) {
       page={page}
       entityId={auth.entityId}
       entityName={auth.entityName}
-      acronym={acronym}
+      companyName={companyName}
     />
   );
 }
@@ -100,12 +99,12 @@ function SalesForm({
   page,
   entityId,
   entityName,
-  acronym,
+  companyName,
 }: {
   page: SalesPage;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
 }) {
   const toast = useToast();
   const router = useRouter();
@@ -223,7 +222,7 @@ function SalesForm({
 
   return (
     <PhoneCard
-      acronym={acronym}
+      company={companyName}
       datePill={datePill(day)}
       badge={<ReportBadge draft={page.draft} />}
       backHref={home}

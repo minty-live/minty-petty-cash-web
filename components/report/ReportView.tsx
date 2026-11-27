@@ -27,7 +27,6 @@ import {
 } from "@/components/report/ReportEdits";
 import { PublishHistory } from "@/components/report/PublishHistory";
 import { ReportSummary } from "@/components/report/ReportSummary";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { getAuth } from "@/lib/auth";
 import { pettyCashHome, REPORT_STEP_VIEW_SKIP, reportStepHref } from "@/lib/companyPages";
@@ -114,11 +113,11 @@ export function ReportView({
     };
   }, [reportId, toast, router]);
 
-  const acronym = entityAcronym(auth?.entityName);
+  const companyName = auth?.entityName ?? "";
   if (!report || !auth) {
     return (
       <PhoneCard
-        acronym={acronym}
+        company={companyName}
         datePill=""
         backHref={auth ? pettyCashHome(auth.entityId, auth.entityName) : undefined}
       >
@@ -136,7 +135,7 @@ export function ReportView({
       onSaved={setReport}
       entityId={auth.entityId}
       entityName={auth.entityName}
-      acronym={acronym}
+      companyName={companyName}
       editDetails={editDetails}
     />
   );
@@ -147,7 +146,7 @@ function ReportViewBody({
   onSaved,
   entityId,
   entityName,
-  acronym,
+  companyName,
   editDetails,
 }: {
   report: DailyReport;
@@ -155,7 +154,7 @@ function ReportViewBody({
   onSaved: (report: DailyReport) => void;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
   /** Open in Edit Details (report history's menu). */
   editDetails: boolean;
 }) {
@@ -212,7 +211,7 @@ function ReportViewBody({
 
   return (
     <PhoneCard
-      acronym={acronym}
+      company={companyName}
       datePill={datePill(report.transaction_date)}
       badge={
         <ReportBadge

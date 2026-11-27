@@ -26,9 +26,12 @@ const UNREACHABLE = "We couldn't reach Petty Cash. Check your connection, then r
  */
 function Frame({ children, overlays }: { children: ReactNode; overlays?: ReactNode }) {
   return (
-    <div className="flask-main-container">
-      <div className="relative flex h-screen w-full flex-col overflow-hidden bg-flask-gray-50 shadow-flask-xl">
-        <div className="flex flex-1 flex-col overflow-y-auto px-4 text-center">
+    // PhoneCard's page (2026-11-27): white, the column in Flask's grey card, and one scroll - the
+    // document's, so the scroll bar is at the window's edge. No header bar: Flask's submitted
+    // page has none.
+    <div className="min-h-screen bg-flask-white">
+      <div className="flask-main-container relative flex min-h-screen w-full flex-col bg-flask-gray-50 shadow-flask-xl">
+        <div className="flex flex-1 flex-col px-4 text-center">
           <div className="my-auto flex flex-col items-center py-4">{children}</div>
         </div>
         {overlays}

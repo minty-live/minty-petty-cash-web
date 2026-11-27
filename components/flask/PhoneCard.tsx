@@ -1,118 +1,40 @@
 "use client";
 
-import { useRef, type ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 
-import { BackLink } from "@minty/shared/backLink";
-import { useViewer } from "@minty/shared/viewer";
+import { NavMenu, ViewerBadge } from "@minty/shared/sidebar";
+import { HeaderBack, HeaderCompany } from "@minty/shared/ui";
 
-import { useMounted, useSidebar } from "@/components/ui/Sidebar";
+import { useMounted } from "@/components/ui/Sidebar";
 import { sidebarHost } from "@/components/ui/sidebarHost";
 
-/** The header's back chevron, Flask's. */
-function Chevron() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      className="h-6 w-6"
-      fill="none"
-      viewBox="0 0 24 24"
-      stroke="currentColor"
-      aria-hidden="true"
-    >
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M15 19l-7-7 7-7" />
-    </svg>
-  );
-}
-
 /**
- * Flask's two header buttons, drawn as Flask draws them (28px initials on #FFE6B1, the 40px ≡ in
- * #656565) and wired to the shared sidebar: the initials open My Profile as the sidebar's sheet,
- * over the page (the owner, 2026-10-20) - the entity list only where no sidebar can hold it - and
- * the ≡ opens the menu.
- */
-function HeaderButtons() {
-  const sidebar = useSidebar();
-  const mounted = useMounted();
-  const viewer = useViewer();
-  const menu = useRef<HTMLButtonElement>(null);
-  const profile = useRef<HTMLButtonElement>(null);
-  const initials = (
-    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-flask-avatar-bg text-[12px] font-semibold text-flask-avatar-ink">
-      {viewer?.initials || "?"}
-    </span>
-  );
-  const BADGE =
-    "relative inline-flex shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-flask-focus";
-  return (
-    <div className="flex items-center gap-2">
-      {sidebar?.canOpenProfile ? (
-        <button
-          ref={profile}
-          type="button"
-          onClick={() => sidebar.openProfile(profile.current)}
-          className={BADGE}
-          aria-label="My Profile"
-          aria-expanded={sidebar.open && sidebar.view === "profile"}
-          aria-controls={sidebar.panelId}
-          title={viewer?.name ?? ""}
-        >
-          {initials}
-        </button>
-      ) : (
-        // No sheet to open here: the entity list (minty-web has no profile page since 2026-11-03),
-        // named for where it goes.
-        <a
-          href={mounted ? sidebarHost.links.entities() : undefined}
-          className={BADGE}
-          aria-label="Select Company"
-          title={viewer?.name ?? ""}
-        >
-          {initials}
-        </a>
-      )}
-      <button
-        ref={menu}
-        type="button"
-        onClick={() => sidebar?.openMenu(menu.current)}
-        aria-label="Open navigation menu"
-        aria-expanded={sidebar ? sidebar.open && sidebar.view === "menu" : false}
-        aria-controls={sidebar?.panelId}
-        className="inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-flask-md text-flask-menu transition-colors hover:bg-flask-menu/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-flask-focus"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 -960 960 960"
-          fill="currentColor"
-          className="size-6"
-          aria-hidden="true"
-        >
-          <path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z" />
-        </svg>
-      </button>
-    </div>
-  );
-}
-
-/**
- * Flask's page frame for Petty Cash (`entity_dashboard_v2.html`): a "phone card" - full width on a
- * phone, 640 / 768 / 1024 px centred above that (`.flask-main-container`), the screen's height,
- * grey, with a large shadow - whose content scrolls inside it. Its header: the back chevron to the
- * company list, the company's initials in the middle, the person's initials (My Profile) and the
- * menu. `overlays` (Flask's modals) sit inside the card, over everything in it.
+ * Petty Cash's page frame, laid out as every app's page (the user, 2026-11-27: "header takes up
+ * whole screen and the scroll at the border same way as other apps"):
  *
- * A report step's header (`report/*.html`) adds the day's date pill before the initials and the
- * report's status badge after them, sets the initials a weight lighter, and carries the stepper
- * under the header (`stepper`), outside the scrolling content.
+ * - **The header bar** spans the window, white with a hairline under it, and stays at the top -
+ *   minty-web's `AppHeader` / Payment Request's `Header`: "‹ Back" (`@minty/shared`'s
+ *   `HeaderBack`) and the page's name on the left; the company (`HeaderCompany`), the person's
+ *   initials (My Profile) and the ≡ on the right (the shared sidebar's `ViewerBadge` and
+ *   `NavMenu`, classic look).
+ * - **The band under it**, held at the top with it: a report's day and status badge, the step's
+ *   stepper (`stepper`) or report history's date filter (`toolbar`, drawn as given).
+ * - **The page**: white, with the content in Flask's grey phone card - full width on a phone,
+ *   640 / 768 / 1024 px centred above (`.flask-main-container`), the screen's height, shadowed
+ *   (the user, 2026-11-27: "keep the body a white background while the main column is wrapped in
+ *   the card"). The card is a fixed backdrop, so it stays whole as the page scrolls past it; one
+ *   scroll, the document's, so the scroll bar is at the window's edge. `overlays`
+ *   (Flask's modals, `absolute inset-0`) sit in a frame the column's width and the screen's
+ *   height. `flush`: the content pads itself (report history).
  *
- * Report history (`report_history/report_history.html`) puts its date filter there instead
- * (`toolbar`, drawn as given), and pads its own content (`flush`).
+ * The dashboard (`home`) is the app's main page: no way back, as Payment Request's list.
  *
- * A shared report (`publicView`, Flask's `is_shared_link`) keeps only the middle: no chevron and no
- * header buttons, Flask's empty boxes in their place - and so no read of the person (the page has
- * no token) and nowhere to go.
+ * A shared report (`publicView`, Flask's `is_shared_link`): the name and the company only - no way
+ * back, no initials, no menu, so no read of the person (the page has no token) and nowhere to go.
  */
 export function PhoneCard({
-  acronym,
+  company,
+  title = "Petty Cash",
   children,
   overlays,
   datePill,
@@ -122,125 +44,128 @@ export function PhoneCard({
   flush = false,
   backHref,
   backSkip,
+  home = false,
   publicView = false,
 }: {
-  acronym: string;
+  /** The company's name, at the bar's right. */
+  company: string;
+  /** The page's name, beside the way back. */
+  title?: string;
   children: ReactNode;
   overlays?: ReactNode;
-  /** A report step: "01 SEP". */
+  /** A report's day: "01 SEP". */
   datePill?: string;
-  /** A report step: its Draft / Submitted / Published badge. */
+  /** A report's Draft / Submitted / Published badge. */
   badge?: ReactNode;
   stepper?: ReactNode;
-  /** Report history: its date filter under the header, outside the scrolling content. */
+  /** Report history: its date filter under the header, outside the page's content. */
   toolbar?: ReactNode;
   /** The content pads itself: only Flask's room at the bottom (`pb-40`). */
   flush?: boolean;
   /**
-   * Where the chevron goes when nothing in this app came before the page (a link, a new tab): it
-   * goes back to the page the person came from (`@minty/shared/backLink`). Without it, the
-   * company list, always (the dashboard's).
+   * Where Back goes when nothing in this app came before the page (a link, a new tab): it goes
+   * back to the page the person came from (`@minty/shared/backLink`). Without it, the company
+   * list, always (the dashboard's).
    */
   backHref?: string;
-  /** Pages the chevron's Back steps over (the wizard's own steps - `WIZARD_BACK_SKIP`). */
+  /** Pages Back steps over (the wizard's own steps - `WIZARD_BACK_SKIP`). */
   backSkip?: RegExp[];
-  /** A shared report: no chevron, no person's initials, no menu. */
+  /** The app's main page (the dashboard): no way back, as Payment Request's list (the user, 2026-11-27). */
+  home?: boolean;
+  /** A shared report: no way back, no person's initials, no menu. */
   publicView?: boolean;
 }) {
-  const report = datePill !== undefined;
-  // The two header links read the cookie and the page's origin, which the server does not have:
+  // The companies link reads the cookie and the page's origin, which the server does not have:
   // drawn without an address until the browser has taken over, so both renders agree.
   const mounted = useMounted();
+  // A scrollIntoView({block: "start"}) lands under the sticky top, not behind it: the window's
+  // scroll padding follows the top's height (the band wraps on a phone).
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = top.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const root = document.documentElement;
+    const set = () => {
+      root.style.scrollPaddingTop = `${el.offsetHeight}px`;
+    };
+    set();
+    const watch = new ResizeObserver(set);
+    watch.observe(el);
+    return () => {
+      watch.disconnect();
+      root.style.scrollPaddingTop = "";
+    };
+  }, []);
+  const day = datePill || badge;
   return (
-    <div className="flask-main-container flex min-h-screen items-center justify-center">
-      <div className="relative flex h-screen w-full flex-col overflow-hidden bg-flask-gray-50 shadow-flask-xl">
-        <div className="relative flex flex-shrink-0 items-center justify-between bg-flask-gray-50 px-4 py-3">
-          {publicView ? (
-            <div className="h-6 w-6 shrink-0" />
-          ) : (
-            <div
-              className={
-                report
-                  ? "flex shrink-0 justify-start sm:min-w-0 sm:flex-1"
-                  : "flex min-w-0 flex-1 justify-start"
-              }
-            >
-              {backHref ? (
-                <BackLink
-                  href={backHref}
-                  skip={backSkip}
-                  className="text-flask-header transition-colors"
-                  ariaLabel="Back"
-                >
-                  <Chevron />
-                </BackLink>
+    <div className="relative flex min-h-screen min-w-0 flex-col bg-flask-white">
+      {/* The card behind the column: the screen's height wherever the page is scrolled. */}
+      <div
+        aria-hidden
+        data-phone-card
+        className="flask-main-container pointer-events-none fixed inset-x-0 inset-y-0 z-0 mx-auto bg-flask-gray-50 shadow-flask-xl"
+      />
+      <div ref={top} data-phone-card-top className="sticky top-0 z-20 flex-shrink-0">
+        <header className="border-b border-border-default bg-flask-white pt-[env(safe-area-inset-top,0px)]">
+          <div className="mx-auto flex h-16 w-full max-w-[1920px] items-center justify-between gap-2 px-4 sm:h-18 sm:gap-3 sm:px-6">
+            {/* The way back and the name stay whole; the company's side gives way (AppHeader's rule). */}
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              {publicView || home ? null : backHref ? (
+                <HeaderBack href={backHref} skip={backSkip} />
               ) : (
-                <a
-                  href={mounted ? sidebarHost.links.entities() : undefined}
-                  className="text-flask-header transition-colors"
-                  aria-label="Back to your companies"
-                >
-                  <Chevron />
-                </a>
+                <HeaderBack
+                  href={mounted ? sidebarHost.links.entities() : ""}
+                  direct
+                  ariaLabel="Back to your companies"
+                />
+              )}
+              <h1 className="shrink-0 cursor-default whitespace-nowrap text-base font-semibold text-text-primary sm:text-lg">
+                {title}
+              </h1>
+            </div>
+            <div className="flex min-w-0 items-center justify-end gap-1.5 sm:gap-3">
+              {company ? <HeaderCompany name={company} /> : null}
+              {publicView ? null : (
+                <div className="flex shrink-0 items-center gap-1.5 pl-0.5 sm:gap-2 sm:pl-2">
+                  <ViewerBadge />
+                  <NavMenu />
+                </div>
               )}
             </div>
-          )}
-          {publicView ? (
-            // Nothing either side, so the day and the company's name share the whole width, centred.
-            <div className="mx-2 flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap sm:gap-3">
-              {datePill ? (
-                <span className="shrink-0 whitespace-nowrap rounded-full bg-flask-teal-soft/50 px-2 py-1 text-xs font-medium text-flask-teal-pill sm:px-3">
-                  {datePill}
-                </span>
+          </div>
+        </header>
+        {day || stepper || toolbar ? (
+          <div data-phone-card-band>
+            <div className="flask-main-container bg-flask-gray-50">
+              {day ? (
+                <div className="flex flex-wrap items-center gap-2 px-4 pt-3 sm:px-6">
+                  {datePill ? (
+                    <span className="shrink-0 whitespace-nowrap rounded-full bg-flask-teal-soft/50 px-2 py-1 text-xs font-medium text-flask-teal-pill sm:px-3">
+                      {datePill}
+                    </span>
+                  ) : null}
+                  {badge}
+                </div>
               ) : null}
-              <h1
-                className="min-w-0 truncate text-lg font-medium text-flask-header"
-                title={acronym}
-              >
-                {acronym}
-              </h1>
-              {badge}
+              {stepper ? <div className="px-4 py-2 sm:px-6">{stepper}</div> : null}
+              {toolbar}
             </div>
-          ) : report ? (
-            // Below 640px the group takes the room between the chevron and the buttons, centred there
-            // (the page's centre leaves the longest badge under the initials); above, Flask's centre.
-            <div className="mx-2 flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap sm:absolute sm:left-1/2 sm:mx-0 sm:flex-none sm:-translate-x-1/2 sm:gap-3">
-              {datePill ? (
-                <span className="shrink-0 whitespace-nowrap rounded-full bg-flask-teal-soft/50 px-2 py-1 text-xs font-medium text-flask-teal-pill sm:px-3">
-                  {datePill}
-                </span>
-              ) : null}
-              <h1 className="min-w-0 truncate text-lg font-medium text-flask-header">{acronym}</h1>
-              {badge}
-            </div>
-          ) : (
-            <h1 className="absolute left-1/2 -translate-x-1/2 text-lg font-semibold text-flask-header">
-              {acronym}
-            </h1>
-          )}
-          {publicView ? (
-            <div className="h-8 w-8 shrink-0" />
-          ) : (
-            <div
-              className={report ? "flex shrink-0 justify-end sm:flex-1" : "flex flex-1 justify-end"}
-            >
-              <HeaderButtons />
-            </div>
-          )}
-        </div>
-        {stepper ? (
-          <div className="relative flex-shrink-0 bg-flask-gray-50 px-4 py-2 sm:px-6 sm:py-2">
-            {stepper}
           </div>
         ) : null}
-        {toolbar}
-        <div
-          className={`relative flex-1 overflow-y-auto overflow-x-hidden bg-flask-gray-50 ${flush ? "" : "p-6"} pb-40`}
-        >
-          {children}
-        </div>
-        {overlays}
       </div>
+      <div
+        data-phone-card-content
+        className={`flask-main-container relative z-[1] flex-1 overflow-x-clip ${flush ? "" : "p-6"} pb-40`}
+      >
+        {children}
+      </div>
+      {overlays ? (
+        // The column's width, the screen's height: Flask's modals cover what the person sees,
+        // wherever the page is scrolled. Clicks pass through where no modal is open.
+        <div className="flask-main-container pointer-events-none fixed inset-x-0 inset-y-0 z-40 mx-auto [&>*]:pointer-events-auto">
+          {overlays}
+        </div>
+      ) : null}
     </div>
   );
 }

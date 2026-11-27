@@ -16,12 +16,9 @@ test("the hand-off lands on the company's Petty Cash dashboard, read from the AP
   await enter(page, creds, home);
 
   await expect(page).toHaveURL(new RegExp(`${home}$`));
-  // Flask's header: the company's initials are the page's h1
-  const initials = creds.entityName
-    .split(/\s+/)
-    .map((w) => w[0].toUpperCase())
-    .join("");
-  await expect(page.getByRole("heading", { level: 1, name: initials })).toBeVisible();
+  // every app's header (2026-11-27): the page's name, and the company's at the bar's right
+  await expect(page.getByRole("heading", { level: 1, name: "Petty Cash" })).toBeVisible();
+  await expect(page.getByRole("banner").getByText(creds.entityName)).toBeVisible();
   // the dashboard drew from GET /home (the calendar appears only once it answered)
   await expect(page.getByRole("heading", { name: "Report Calendar" })).toBeVisible();
   await expectNoHorizontalScroll(page);

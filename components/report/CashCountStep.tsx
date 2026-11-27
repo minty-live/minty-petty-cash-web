@@ -23,7 +23,6 @@ import {
   fixNote,
 } from "@/components/report/ReportChrome";
 import { fieldOf, sentenceOf, toOpening, useBackToOpening } from "@/components/report/stepErrors";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import {
   cents,
@@ -108,10 +107,10 @@ export function CashCountStep({ day }: { day: string | null }) {
     };
   }, [day, toast, backToOpening]);
 
-  const acronym = entityAcronym(auth?.entityName);
+  const companyName = auth?.entityName ?? "";
   if (!page || !auth) {
     return (
-      <PhoneCard acronym={acronym} datePill="">
+      <PhoneCard company={companyName} datePill="">
         {!failed ? (
           <p className="text-sm text-flask-gray-500" role="status">
             Loading…
@@ -125,7 +124,7 @@ export function CashCountStep({ day }: { day: string | null }) {
       page={page}
       entityId={auth.entityId}
       entityName={auth.entityName}
-      acronym={acronym}
+      companyName={companyName}
     />
   );
 }
@@ -138,12 +137,12 @@ function CashCountForm({
   page,
   entityId,
   entityName,
-  acronym,
+  companyName,
 }: {
   page: CashCountPage;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
 }) {
   const toast = useToast();
   const router = useRouter();
@@ -394,7 +393,7 @@ function CashCountForm({
 
   return (
     <PhoneCard
-      acronym={acronym}
+      company={companyName}
       datePill={datePill(day)}
       badge={<ReportBadge draft={page.draft} />}
       backHref={home}

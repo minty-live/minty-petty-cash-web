@@ -474,7 +474,7 @@ for (const [badge, over, tone] of [
   ],
   ["Publish failed", { publishing_status: "failed" }, "danger"],
 ] as const) {
-  test(`View: the header's date, initials and "${badge}" clear the back arrow and the person's initials`, async ({
+  test(`View: the day and "${badge}" sit under the header, clear of Back and the person's initials`, async ({
     page,
   }) => {
     await openView(page, { report: reportAnswer(over) });
@@ -491,8 +491,10 @@ for (const [badge, over, tone] of [
       new RegExp(`bg-status-${tone}-bg.*text-status-${tone}-ink`),
     );
     const pill = await box(page.getByText(badge, { exact: true }));
-    expect(date.x).toBeGreaterThanOrEqual(back.x + back.width);
-    expect(pill.x + pill.width).toBeLessThanOrEqual(profile.x);
+    // the band under the bar (2026-11-27): below Back and the initials, never over them
+    expect(date.y).toBeGreaterThanOrEqual(back.y + back.height);
+    expect(pill.y).toBeGreaterThanOrEqual(profile.y + profile.height);
+    expect(pill.x + pill.width).toBeLessThanOrEqual(page.viewportSize()!.width);
     await expectNoHorizontalScroll(page);
   });
 }

@@ -21,7 +21,6 @@ import {
   WithdrawalCard,
 } from "@/components/report/ReportEdits";
 import { CardIcon, CashIcon, Section, Total, TruckIcon } from "@/components/report/SalesStep";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { getAuth } from "@/lib/auth";
 import { denominationLabel, rowTotal } from "@/lib/cash";
@@ -124,11 +123,11 @@ export function ReportStepView({
     };
   }, [reportId, step, toast, router]);
 
-  const acronym = entityAcronym(auth?.entityName);
+  const companyName = auth?.entityName ?? "";
   if (!report || !auth) {
     return (
       <PhoneCard
-        acronym={acronym}
+        company={companyName}
         datePill=""
         backHref={auth ? pettyCashHome(auth.entityId, auth.entityName) : undefined}
       >
@@ -147,7 +146,7 @@ export function ReportStepView({
       step={step}
       entityId={auth.entityId}
       entityName={auth.entityName}
-      acronym={acronym}
+      companyName={companyName}
       editDetails={editDetails}
     />
   );
@@ -162,7 +161,7 @@ function StepViewBody({
   step,
   entityId,
   entityName,
-  acronym,
+  companyName,
   editDetails,
 }: {
   report: DailyReport;
@@ -171,7 +170,7 @@ function StepViewBody({
   step: StepSegment;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
   editDetails: boolean;
 }) {
   const summary = reportHref(entityId, entityName, report.report_id, "summary");
@@ -219,7 +218,7 @@ function StepViewBody({
 
   return (
     <PhoneCard
-      acronym={acronym}
+      company={companyName}
       datePill={datePill(report.transaction_date)}
       badge={
         <ReportBadge

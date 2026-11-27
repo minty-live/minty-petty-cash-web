@@ -111,11 +111,9 @@ test("the page loads with no console error - a hydration mismatch included", asy
   // render that the browser then hydrates - where a mismatch shows (the cookie is set by now).
   await page.reload();
   await expect(page.getByRole("heading", { name: "Report Calendar" })).toBeVisible();
-  // the header's links read the cookie and the origin, so they are filled in after hydration
-  await expect(page.getByRole("link", { name: "Back to your companies" })).toHaveAttribute(
-    "href",
-    /\/handoff\/minty-web/,
-  );
+  // the main page has no way back (as Payment Request's list, 2026-11-27); the menu is there
+  await expect(page.getByRole("link", { name: /Back/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeVisible();
   // My Profile is the sidebar's sheet, over the page - never a page of its own (the owner, 2026-10-20)
   await expect(page.getByRole("link", { name: "My Profile" })).toHaveCount(0);
   const before = page.url();
@@ -128,9 +126,18 @@ test("the page loads with no console error - a hydration mismatch included", asy
   expect(errors).toEqual([]);
 });
 
-test("Flask's header: the company's initials, the person's, the menu", async ({ page }) => {
+test("every app's header: the page's name (no Back on the main page), the company, the initials, the menu", async ({
+  page,
+}) => {
   await enterWith(page, homeAnswer());
-  await expect(page.getByRole("heading", { level: 1, name: "EPCS" })).toBeVisible();
+  const bar = page.getByRole("banner");
+  await expect(bar.getByRole("link", { name: /Back/ })).toHaveCount(0);
+  await expect(bar.getByRole("heading", { level: 1, name: "Petty Cash" })).toBeVisible();
+  await expect(bar.getByText(NAME)).toBeVisible();
+  // the bar spans the window, not the centred column
+  const box = await bar.boundingBox();
+  expect(box?.x).toBe(0);
+  expect(box?.width).toBe(page.viewportSize()?.width);
   await expect(page.getByRole("button", { name: "My Profile" })).toHaveText("TT");
   await expect(page.getByRole("button", { name: "Open navigation menu" })).toBeVisible();
   await expect(page.getByText("1 user", { exact: true })).toBeVisible();

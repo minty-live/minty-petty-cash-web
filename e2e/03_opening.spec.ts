@@ -115,7 +115,8 @@ const toast = (page: Page, text: string | RegExp) =>
 test("Flask's report header and the balances the day opens from", async ({ page }) => {
   await openWith(page, openingAnswer());
   await expect(page.getByText("13 OCT")).toBeVisible();
-  await expect(page.getByRole("heading", { level: 1, name: "EPCS" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Petty Cash" })).toBeVisible();
+  await expect(page.getByRole("banner").getByText(NAME)).toBeVisible();
   await expect(page.getByText("Draft", { exact: true })).toBeVisible();
   await expect(page.getByText("Starting Cash Balance")).toBeVisible();
   await expect(page.getByText("HKD 1,200.00").first()).toBeVisible();

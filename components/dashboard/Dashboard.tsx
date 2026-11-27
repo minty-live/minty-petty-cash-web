@@ -13,7 +13,6 @@ import { ReportCalendar } from "@/components/dashboard/ReportCalendar";
 import { Stepper } from "@/components/flask/Stepper";
 import { PhoneCard } from "@/components/flask/PhoneCard";
 import { useToast } from "@/components/flask/Toasts";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashFetch } from "@/lib/apiClient";
 import { reportHref } from "@/lib/companyPages";
 import {
@@ -83,10 +82,10 @@ export function Dashboard() {
     };
   }, [toast]);
 
-  const acronym = entityAcronym(auth?.entityName);
+  const companyName = auth?.entityName ?? "";
   if (load.kind !== "ready") {
     return (
-      <PhoneCard acronym={acronym}>
+      <PhoneCard home company={companyName}>
         {load.kind === "loading" ? (
           <p className="text-sm text-flask-gray-500" role="status">
             Loading…
@@ -101,7 +100,7 @@ export function Dashboard() {
       nextDay={load.nextDay}
       entityId={auth?.entityId ?? ""}
       entityName={auth?.entityName ?? ""}
-      acronym={acronym}
+      companyName={companyName}
     />
   );
 }
@@ -111,14 +110,14 @@ function DashboardBody({
   nextDay,
   entityId,
   entityName,
-  acronym,
+  companyName,
 }: {
   home: Home;
   /** A day to start on arrival (Flask's `autoStartNextDay`): selected, then started as Start New Report would. */
   nextDay: string | null;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
 }) {
   const toast = useToast();
   // A first report opens on onboarding's start date; a hand-over's day wins.
@@ -311,7 +310,7 @@ function DashboardBody({
   );
 
   return (
-    <PhoneCard acronym={acronym} overlays={overlays}>
+    <PhoneCard home company={companyName} overlays={overlays}>
       <div className="mb-6">
         {catchUpWarning(home, selected) ? (
           <div className="mb-4">

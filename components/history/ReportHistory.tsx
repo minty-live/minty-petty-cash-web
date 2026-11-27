@@ -9,7 +9,6 @@ import { RangeCalendar } from "@/components/history/RangeCalendar";
 import { useDeleteReport, useEditReport } from "@/components/report/ReportActions";
 import { usePublish, type PublishAsk } from "@/components/report/Publish";
 import { BADGE_TONE, LoadingOverlay } from "@/components/report/ReportChrome";
-import { entityAcronym } from "@/lib/acronym";
 import { ApiError, pettyCashDownload, pettyCashFetch } from "@/lib/apiClient";
 import { pettyCashHome, reportEditDetailsHref, reportHref } from "@/lib/companyPages";
 import {
@@ -147,15 +146,20 @@ export function ReportHistory({ filters }: { filters: HistoryFilters }) {
     toast("Filter applied", "info");
   }, [filtered, toast]);
 
-  const acronym = entityAcronym(auth?.entityName);
-  if (!auth) return <PhoneCard acronym={acronym}>{null}</PhoneCard>;
+  const companyName = auth?.entityName ?? "";
+  if (!auth)
+    return (
+      <PhoneCard company={companyName} title="Report History">
+        {null}
+      </PhoneCard>
+    );
   return (
     <HistoryBody
       load={load}
       filters={filters}
       entityId={auth.entityId}
       entityName={auth.entityName}
-      acronym={acronym}
+      companyName={companyName}
       retry={() => {
         setLoad({ kind: "loading" });
         setAttempt((n) => n + 1);
@@ -173,7 +177,7 @@ function HistoryBody({
   filters,
   entityId,
   entityName,
-  acronym,
+  companyName,
   retry,
   reload,
 }: {
@@ -181,7 +185,7 @@ function HistoryBody({
   filters: HistoryFilters;
   entityId: string;
   entityName: string;
-  acronym: string;
+  companyName: string;
   retry: () => void;
   reload: () => Promise<void>;
 }) {
@@ -453,7 +457,8 @@ function HistoryBody({
   const page = load.kind === "ready" ? load.page : null;
   return (
     <PhoneCard
-      acronym={acronym}
+      company={companyName}
+      title="Report History"
       backHref={pettyCashHome(entityId, entityName)}
       toolbar={toolbar}
       overlays={overlays}

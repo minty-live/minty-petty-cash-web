@@ -120,11 +120,14 @@ test("the shared report: Flask's shared view - the day, the company, the summary
   await expect(page.getByRole("heading", { name: "Summary", exact: true })).toBeVisible();
   expect(new URL(page.url()).pathname).toBe(PAGE);
 
-  // the header: the day, the company's name beside it, the badge - no chevron, no person, no menu
-  const header = page.getByRole("heading", { level: 1, name: NAME }).locator("..");
-  await expect(header.getByText("13 OCT", { exact: true })).toBeVisible();
-  await expect(header.getByRole("heading", { level: 1, name: NAME })).toBeVisible();
-  await expect(header.getByText("Submitted", { exact: true })).toBeVisible();
+  // every app's header with only the page's name and the company (2026-11-27) - no Back, no
+  // person, no menu - and the day and the badge in the band under it
+  const header = page.getByRole("banner");
+  await expect(header.getByRole("heading", { level: 1, name: "Petty Cash" })).toBeVisible();
+  await expect(header.getByText(NAME)).toBeVisible();
+  const band = page.locator("[data-phone-card-band]");
+  await expect(band.getByText("13 OCT", { exact: true })).toBeVisible();
+  await expect(band.getByText("Submitted", { exact: true })).toBeVisible();
   // no link anywhere - not even a closed sidebar's
   await expect(page.locator("a")).toHaveCount(0);
   await expect(page.locator("nav")).toHaveCount(0);
@@ -208,11 +211,9 @@ test("only what arrives is drawn: no history, no yesterday, no expenses, no diff
   await expect(card(page, "Sales History")).toHaveCount(0);
   await expect(card(page, "Total Expenses")).toContainText("No expenses recorded");
   await expect(page.getByText(/Cash (Shortage|Surplus):/)).toHaveCount(0);
+  // the badge sits in the band under the header (2026-11-27)
   await expect(
-    page
-      .getByRole("heading", { level: 1, name: NAME })
-      .locator("..")
-      .getByText("Published", { exact: true }),
+    page.locator("[data-phone-card-band]").getByText("Published", { exact: true }),
   ).toBeVisible();
   await expectNoHorizontalScroll(page);
 });
